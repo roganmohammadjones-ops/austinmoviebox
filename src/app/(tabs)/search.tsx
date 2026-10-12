@@ -62,13 +62,12 @@ export default function SearchScreen() {
     }
 
     const trimmed = query.trim();
-    if (trimmed) {
-      debounceTimerRef.current = setTimeout(() => {
+    debounceTimerRef.current = setTimeout(
+      () => {
         performFetch(trimmed, selectedGenreId);
-      }, 350);
-    } else {
-      performFetch('', selectedGenreId);
-    }
+      },
+      trimmed ? 350 : 0
+    );
 
     return () => {
       if (debounceTimerRef.current) {

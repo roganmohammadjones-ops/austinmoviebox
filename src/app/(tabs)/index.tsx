@@ -87,8 +87,46 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    loadMovies();
-  }, [loadMovies]);
+    let isMounted = true;
+    (async () => {
+      try {
+        const [trending, popular, topRated, newReleases] = await Promise.all([
+          fetchTrendingMovies(),
+          fetchPopularMovies(),
+          fetchTopRatedMovies(),
+          fetchNewReleasesMovies(),
+        ]);
+
+        if (!isMounted) return;
+        setTrendingMovies(trending);
+        setPopularMovies(popular);
+        setTopRatedMovies(topRated);
+        setNewReleasesMovies(newReleases);
+
+        if (
+          trending.length === 0 &&
+          popular.length === 0 &&
+          topRated.length === 0 &&
+          newReleases.length === 0
+        ) {
+          setError('No movies returned from TMDB API. Please verify your connection.');
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        console.error('[HomeScreen] Error loading movies from TMDB:', err);
+        setError(err?.message || 'Failed to load movies from TMDB.');
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const spotlightMovie = useMemo(() => {
     return trendingMovies[0] || popularMovies[0] || null;

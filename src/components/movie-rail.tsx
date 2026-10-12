@@ -26,18 +26,18 @@ export function MovieRail({ title, movies, onSeeAllPress }: MovieRailProps) {
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
   const isDesktop = windowWidth >= 1024;
 
-  // Responsive card width calculation:
-  // - Small phones (<= 360px): 124px (2 cards + 3rd peek)
-  // - Standard phones (361px - 430px): 138px
-  // - Large phones / phablets (431px - 640px): 148px
-  // - Tablets (641px - 1024px): 164px
-  // - Desktop (>= 1024px): 184px
+  // Responsive card width matching Stitch's w-[132px] design:
+  // - Small phones (<= 360px): 120px
+  // - Standard phones (361px - 430px): 132px (Stitch specification)
+  // - Large phones / phablets (431px - 767px): 140px
+  // - Tablets (768px - 1023px): 156px
+  // - Desktop (>= 1024px): 176px
   const cardWidth = useMemo(() => {
-    if (isDesktop) return 184;
-    if (isTablet) return 164;
-    if (windowWidth > 430) return 148;
-    if (isSmallDevice) return 124;
-    return 138;
+    if (isDesktop) return 176;
+    if (isTablet) return 156;
+    if (windowWidth > 430) return 140;
+    if (isSmallDevice) return 120;
+    return 132;
   }, [isDesktop, isTablet, isSmallDevice, windowWidth]);
 
   const horizontalPadding = useMemo(() => {
@@ -111,13 +111,13 @@ export function MovieRail({ title, movies, onSeeAllPress }: MovieRailProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   titleGroup: {
     flexDirection: 'row',
@@ -150,5 +150,6 @@ const styles = StyleSheet.create({
   },
   railContent: {
     paddingVertical: 2,
+    alignItems: 'flex-start',
   },
 });

@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchMovieDetails } from '../../services/movie-api';
+import { fetchMovieDetails, openMovieTrailer } from '../../services/movie-api';
 import { useAuthStore } from '../../stores/auth-store';
 import { useFavoritesStore } from '../../stores/favorites-store';
 import { colors } from '../../theme/tokens';
@@ -113,6 +113,12 @@ export default function MovieDetailScreen() {
     toggleFavorite(movie, user?.id);
   };
 
+  const handlePlayTrailer = () => {
+    if (movie) {
+      openMovieTrailer(movie);
+    }
+  };
+
   const handleShare = async () => {
     try {
       await Share.share({
@@ -154,7 +160,7 @@ export default function MovieDetailScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Backdrop Banner */}
+          {/* Backdrop Banner with Centered Theatrical Video Play Button */}
           <View style={styles.backdropContainer}>
             {movie.backdropUrl ? (
               <Image
@@ -167,6 +173,25 @@ export default function MovieDetailScreen() {
             <View style={styles.backdropScrimTop} />
             <View style={styles.backdropScrimBottom} />
             <View style={styles.ambientGlow} />
+
+            {/* Centered Theatrical Video Play Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Watch official trailer for ${movie.title}`}
+              onPress={handlePlayTrailer}
+              style={({ pressed }) => [
+                styles.backdropPlayBtn,
+                { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+              ]}
+            >
+              <View style={styles.backdropPlayCircle}>
+                <Ionicons name="play" size={32} color={colors.cinemaCanvas} style={{ marginLeft: 3 }} />
+              </View>
+              <View style={styles.backdropPlayBadge}>
+                <Ionicons name="videocam-outline" size={12} color={colors.cinemaAmber} />
+                <Text style={styles.backdropPlayBadgeText}>WATCH TRAILER</Text>
+              </View>
+            </Pressable>
           </View>
 
           {/* Floating Movie Header Block */}
@@ -234,8 +259,21 @@ export default function MovieDetailScreen() {
               </View>
             )}
 
-            {/* 52px Primary Action Bar */}
+            {/* 52px Primary Action Bar: Watch Trailer, Favorite, Share */}
             <View style={styles.actionBar}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Watch trailer"
+                onPress={handlePlayTrailer}
+                style={({ pressed }) => [
+                  styles.primaryPlayTrailerBtn,
+                  { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                ]}
+              >
+                <Ionicons name="play" size={20} color={colors.cinemaCanvas} />
+                <Text style={styles.primaryPlayTrailerText}>Watch Trailer</Text>
+              </Pressable>
+
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -248,8 +286,8 @@ export default function MovieDetailScreen() {
               >
                 <Ionicons
                   name={isFavorite ? 'heart' : 'heart-outline'}
-                  size={22}
-                  color={isFavorite ? colors.cinemaAmber : colors.cinemaCanvas}
+                  size={20}
+                  color={isFavorite ? colors.cinemaAmber : colors.primaryInk}
                 />
                 <Text
                   style={[
@@ -257,7 +295,7 @@ export default function MovieDetailScreen() {
                     isFavorite && styles.primaryFavBtnTextActive,
                   ]}
                 >
-                  {isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
+                  {isFavorite ? 'Saved' : 'Save'}
                 </Text>
               </Pressable>
 
@@ -576,13 +614,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  backdropPlayBtn: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '32%',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 10,
+  },
+  backdropPlayCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.cinemaAmber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.cinemaAmber,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  backdropPlayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(17, 18, 20, 0.88)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.6)',
+  },
+  backdropPlayBadgeText: {
+    color: colors.cinemaAmber,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+  },
   actionBar: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginBottom: 28,
   },
-  primaryFavBtn: {
-    flex: 1,
+  primaryPlayTrailerBtn: {
+    flex: 1.6,
     height: 52,
     borderRadius: 14,
     backgroundColor: colors.cinemaAmber,
@@ -592,19 +671,36 @@ const styles = StyleSheet.create({
     gap: 8,
     shadowColor: colors.cinemaAmber,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 4,
   },
-  primaryFavBtnActive: {
-    backgroundColor: colors.quietStage,
-    borderWidth: 1,
-    borderColor: colors.cinemaAmber,
-  },
-  primaryFavBtnText: {
+  primaryPlayTrailerText: {
     color: colors.cinemaCanvas,
     fontSize: 15,
     fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  primaryFavBtn: {
+    flex: 1.1,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.quietStage,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.6)',
+  },
+  primaryFavBtnActive: {
+    backgroundColor: colors.quietStage,
+    borderColor: colors.cinemaAmber,
+  },
+  primaryFavBtnText: {
+    color: colors.primaryInk,
+    fontSize: 14,
+    fontWeight: '600',
   },
   primaryFavBtnTextActive: {
     color: colors.cinemaAmber,

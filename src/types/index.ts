@@ -23,6 +23,8 @@ export interface Movie {
   cinematography?: string;
   sound?: string;
   studio?: string;
+  trailerUrl?: string;
+  youtubeKey?: string;
 }
 
 export type MovieCategory = 'trending' | 'popular' | 'top_rated' | 'new_releases';

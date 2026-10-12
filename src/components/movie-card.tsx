@@ -27,25 +27,51 @@ export function MovieCard({ movie, variant = 'rail', cardWidth }: MovieCardProps
   };
 
   const isRail = variant === 'rail';
+  const effectiveWidth = cardWidth || 132;
+  const posterHeight = Math.round(effectiveWidth * 1.5);
 
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={`View details for ${movie.title}`}
       onPress={handlePress}
       style={({ pressed }) => [
-        isRail ? [styles.railContainer, cardWidth ? { width: cardWidth } : null] : styles.gridContainer,
+        isRail
+          ? [
+              styles.railContainer,
+              {
+                width: effectiveWidth,
+                minWidth: effectiveWidth,
+                maxWidth: effectiveWidth,
+              },
+            ]
+          : styles.gridContainer,
         { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
       ]}
     >
-      <View style={styles.posterWrapper}>
+      <View
+        style={[
+          styles.posterWrapper,
+          isRail
+            ? {
+                width: effectiveWidth,
+                height: posterHeight,
+                maxHeight: posterHeight,
+              }
+            : {
+                width: '100%',
+                aspectRatio: 2 / 3,
+              },
+        ]}
+      >
         <Image
           source={{ uri: movie.posterUrl }}
           style={styles.posterImage}
           contentFit="cover"
-          transition={300}
+          transition={250}
         />
 
-        {/* Gradient Scrim */}
+        {/* Ambient Gradient Scrim */}
         <View style={styles.scrimOverlay} />
 
         {/* Rating Badge */}
@@ -95,8 +121,9 @@ export function MovieCard({ movie, variant = 'rail', cardWidth }: MovieCardProps
 
 const styles = StyleSheet.create({
   railContainer: {
-    width: 136,
     marginRight: 12,
+    flexShrink: 0,
+    flexGrow: 0,
   },
   gridContainer: {
     flex: 1,
@@ -108,14 +135,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(53, 56, 60, 0.4)',
   },
   posterWrapper: {
-    width: '100%',
-    aspectRatio: 2 / 3,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.quietStage,
     position: 'relative',
   },
   posterImage: {
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
@@ -140,7 +166,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(53, 56, 60, 0.5)',
   },
   ratingText: {
-    color: colors.ratingGold,
+    color: colors.cinemaAmber,
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'Courier',
@@ -160,13 +186,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   metaContainer: {
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingHorizontal: 2,
+    paddingBottom: 4,
+    width: '100%',
   },
   titleText: {
     color: colors.primaryInk,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,
   },
@@ -174,17 +201,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 2,
   },
   yearText: {
-    color: colors.secondaryInk,
-    fontSize: 12,
+    color: colors.mutedInk,
+    fontSize: 11,
     fontFamily: 'Courier',
   },
   railRatingText: {
-    color: colors.ratingGold,
-    fontSize: 12,
-    fontWeight: '600',
+    color: colors.cinemaAmber,
+    fontSize: 11,
+    fontWeight: '700',
     fontFamily: 'Courier',
   },
   genrePill: {

@@ -5,6 +5,8 @@
  * Pure TMDB API data with zero dummy or hardcoded mock fallbacks.
  */
 
+import * as WebBrowser from 'expo-web-browser';
+import { Linking } from 'react-native';
 import { Movie } from '../types';
 
 // TMDB Configuration from environment variables
@@ -199,6 +201,35 @@ export function mapTmdbMovie(tmdbMovie: any): Movie {
   const durationMinutes =
     typeof tmdbMovie.runtime === 'number' ? tmdbMovie.runtime : 0;
 
+  let youtubeKey: string | undefined;
+  let trailerUrl: string | undefined;
+
+  if (tmdbMovie.videos?.results && Array.isArray(tmdbMovie.videos.results)) {
+    const youtubeVideos = tmdbMovie.videos.results.filter(
+      (v: any) => v.site === 'YouTube' && v.key
+    );
+    const officialTrailer =
+      youtubeVideos.find((v: any) => v.type === 'Trailer' && v.official) ||
+      youtubeVideos.find((v: any) => v.type === 'Trailer') ||
+      youtubeVideos.find((v: any) => v.type === 'Teaser') ||
+      youtubeVideos[0];
+
+    if (officialTrailer?.key) {
+      youtubeKey = officialTrailer.key;
+      trailerUrl = `https://www.youtube.com/watch?v=${officialTrailer.key}`;
+    }
+  }
+
+  // Fallback trailer search URL if direct YouTube video key is not attached
+  if (!trailerUrl) {
+    const movieTitle = tmdbMovie.title || tmdbMovie.original_title || '';
+    if (movieTitle) {
+      trailerUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+        `${movieTitle} ${releaseYear ? releaseYear + ' ' : ''}official trailer`
+      )}`;
+    }
+  }
+
   return {
     id: String(tmdbMovie.id),
     title: tmdbMovie.title || tmdbMovie.original_title || 'Untitled',
@@ -217,6 +248,8 @@ export function mapTmdbMovie(tmdbMovie: any): Movie {
     cinematography,
     sound,
     studio,
+    trailerUrl,
+    youtubeKey,
   };
 }
 
@@ -384,7 +417,7 @@ export async function fetchMovieDetails(id: string): Promise<Movie | null> {
 
   try {
     const res = await fetch(
-      buildUrl(`/movie/${id}`, { append_to_response: 'credits,release_dates' }),
+      buildUrl(`/movie/${id}`, { append_to_response: 'credits,release_dates,videos' }),
       {
         headers: getHeaders(),
       }
@@ -400,3 +433,34 @@ export async function fetchMovieDetails(id: string): Promise<Movie | null> {
     return null;
   }
 }
+
+/**
+ * Theatrical Video Player Helper: Opens official movie trailer in full-screen in-app viewer.
+ * Supports direct YouTube trailer key with fallback to official trailer search.
+ */
+export async function openMovieTrailer(movie: Movie): Promise<void> {
+  if (!movie) return;
+
+  const url =
+    movie.trailerUrl ||
+    (movie.youtubeKey ? `https://www.youtube.com/watch?v=${movie.youtubeKey}` : null) ||
+    `https://www.youtube.com/results?search_query=${encodeURIComponent(
+      `${movie.title} ${movie.releaseYear || ''} official trailer`
+    )}`;
+
+  try {
+    await WebBrowser.openBrowserAsync(url, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      toolbarColor: '#111214',
+      controlsColor: '#D7A35B',
+    });
+  } catch (err) {
+    console.warn('[Trailer] Failed to open in WebBrowser, trying Linking:', err);
+    try {
+      await Linking.openURL(url);
+    } catch (linkErr) {
+      console.error('[Trailer] Could not open URL via Linking:', linkErr);
+    }
+  }
+}
+
