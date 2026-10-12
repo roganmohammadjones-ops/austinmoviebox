@@ -3,7 +3,8 @@ import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '../stores/auth-store';
 import { useFavoritesStore } from '../stores/favorites-store';
 import { useOnboardingStore } from '../stores/onboarding-store';
@@ -28,7 +29,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <View style={styles.root}>
+    <GestureHandlerRootView style={styles.root}>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -60,8 +61,15 @@ export default function RootLayout() {
             animation: 'slide_from_bottom',
           }}
         />
+        <Stack.Screen
+          name="auth-callback"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
       </Stack>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
