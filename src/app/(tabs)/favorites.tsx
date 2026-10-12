@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState } from '../../components/empty-state';
+import { FavoritesEmptyVault } from '../../components/favorites-empty-vault';
 import { MovieCard } from '../../components/movie-card';
 import { SyncBanner } from '../../components/sync-banner';
 import { useFavoritesStore } from '../../stores/favorites-store';
@@ -33,6 +33,13 @@ export default function FavoritesScreen() {
 
   const handleBrowseCatalog = () => {
     router.push('/(tabs)' as any);
+  };
+
+  const handleQuickJump = (query: string) => {
+    router.push({
+      pathname: '/(tabs)/search',
+      params: { q: query },
+    } as any);
   };
 
   return (
@@ -143,12 +150,9 @@ export default function FavoritesScreen() {
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <MovieCard movie={item} variant="grid" />}
         ListEmptyComponent={
-          <EmptyState
-            iconName="heart-dislike-outline"
-            title="Your Vault is Empty"
-            description="Explore our curated film collection and tap the heart icon on any title to save it here."
-            actionLabel="Discover Movies"
-            onActionPress={handleBrowseCatalog}
+          <FavoritesEmptyVault
+            onDiscoverPress={handleBrowseCatalog}
+            onQuickJumpPress={handleQuickJump}
           />
         }
       />

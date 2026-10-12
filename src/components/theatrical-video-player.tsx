@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -14,6 +16,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchMovieTrailerKey, openMovieTrailer } from '../services/movie-api';
+import { useAuthStore } from '../stores/auth-store';
 import { colors } from '../theme/tokens';
 import { Movie } from '../types';
 import { FavoriteButton } from './favorite-button';
@@ -29,9 +32,19 @@ export function TheatricalVideoPlayer({
   visible,
   onClose,
 }: TheatricalVideoPlayerProps) {
+  const router = useRouter();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const { user, signInWithYouTube } = useAuthStore();
+  const isYouTubeConnected = Boolean(
+    user &&
+      (user.user_metadata?.youtube_connected ||
+        user.app_metadata?.provider === 'youtube' ||
+        user.app_metadata?.provider === 'google' ||
+        user.email?.toLowerCase().includes('@gmail.com'))
+  );
 
   const isSmallDevice = windowWidth <= 360;
   const isDesktop = windowWidth >= 1024;
@@ -185,7 +198,9 @@ export function TheatricalVideoPlayer({
                 </View>
                 <View style={styles.nativePlayBadge}>
                   <Ionicons name="logo-youtube" size={14} color="#FF0000" />
-                  <Text style={styles.nativePlayText}>LAUNCH TRAILER IN FULLSCREEN</Text>
+                  <Text style={styles.nativePlayText}>
+                    {isYouTubeConnected ? 'LAUNCH TRAILER IN FULLSCREEN' : 'LAUNCH TRAILER (YOUTUBE REQUIRED)'}
+                  </Text>
                 </View>
               </Pressable>
             </View>
@@ -193,7 +208,11 @@ export function TheatricalVideoPlayer({
         </View>
 
         {/* Movie Info & Control Shelf */}
-        <View style={styles.infoShelf}>
+        <ScrollView
+          style={styles.infoScroll}
+          contentContainerStyle={styles.infoShelfContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.titleRow}>
             <View style={styles.titleGroup}>
               <Text numberOfLines={1} style={[styles.titleText, isDesktop && { fontSize: 24 }]}>
@@ -250,9 +269,76 @@ export function TheatricalVideoPlayer({
             </View>
           </View>
 
+          {/* YouTube Streaming Requirement Banner / Verification Indicator */}
+          {isYouTubeConnected ? (
+            <View style={styles.verifiedShelf}>
+              <View style={styles.verifiedLeft}>
+                <Ionicons name="shield-checkmark" size={14} color="#34C759" />
+                <Text style={styles.verifiedText}>
+                  YouTube Stream Active:{' '}
+                  <Text style={styles.verifiedUser}>
+                    {user?.email || (user?.user_metadata?.name ? `${user.user_metadata.name}@gmail.com` : 'Verified Curator')}
+                  </Text>
+                </Text>
+              </View>
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedBadgeText}>UNRESTRICTED HD</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.authNoticeCard}>
+              <View style={styles.authNoticeTop}>
+                <View style={styles.authNoticeHeader}>
+                  <View style={styles.youtubeMiniBadge}>
+                    <Ionicons name="logo-youtube" size={12} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.authNoticeTitle}>YOUTUBE / GMAIL LOGIN REQUIRED</Text>
+                </View>
+                <View style={styles.authNoticeBadge}>
+                  <Text style={styles.authNoticeBadgeText}>RESTRICTED STREAMS</Text>
+                </View>
+              </View>
+              <Text style={styles.authNoticeDesc}>
+                Age-restricted trailers & official studio previews require an authenticated YouTube or Gmail account.
+              </Text>
+              <View style={styles.authNoticeActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign in with YouTube or Gmail"
+                  onPress={() => {
+                    onClose();
+                    router.push('/auth' as any);
+                  }}
+                  style={({ pressed }) => [
+                    styles.authNoticeBtn,
+                    { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                  ]}
+                >
+                  <Ionicons name="logo-youtube" size={14} color="#FFFFFF" />
+                  <Text style={styles.authNoticeBtnText}>Sign in with YouTube / Gmail</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Quick connect YouTube"
+                  onPress={async () => {
+                    await signInWithYouTube();
+                  }}
+                  style={({ pressed }) => [
+                    styles.quickConnectBtn,
+                    { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                  ]}
+                >
+                  <Ionicons name="flash" size={12} color={colors.cinemaAmber} />
+                  <Text style={styles.quickConnectBtnText}>1-Tap Link</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
           {movie.overview ? (
             <Text
-              numberOfLines={isSmallDevice ? 2 : 3}
+              numberOfLines={isSmallDevice ? 3 : 4}
               style={styles.overviewText}
             >
               {movie.overview}
@@ -272,7 +358,7 @@ export function TheatricalVideoPlayer({
             <Ionicons name="chevron-down" size={18} color={colors.cinemaCanvas} />
             <Text style={styles.dismissBtnText}>Return to Austin MovieBox</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -414,11 +500,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  infoShelf: {
+  infoScroll: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
     backgroundColor: colors.cinemaCanvas,
+  },
+  infoShelfContent: {
+    padding: 20,
+    paddingBottom: 28,
+    gap: 12,
   },
   titleRow: {
     flexDirection: 'row',
@@ -520,5 +609,135 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  verifiedShelf: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(52, 199, 89, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 199, 89, 0.25)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: 4,
+  },
+  verifiedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  verifiedText: {
+    color: colors.primaryInk,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  verifiedUser: {
+    color: '#34C759',
+    fontWeight: '700',
+  },
+  verifiedBadge: {
+    backgroundColor: 'rgba(52, 199, 89, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+  },
+  verifiedBadgeText: {
+    color: '#34C759',
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+    letterSpacing: 0.6,
+  },
+  authNoticeCard: {
+    backgroundColor: '#1C1517',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 0, 0.35)',
+    borderRadius: 14,
+    padding: 12,
+    marginVertical: 4,
+    gap: 8,
+  },
+  authNoticeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  authNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  youtubeMiniBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FF0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authNoticeTitle: {
+    color: '#FF6B6B',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    fontFamily: 'Courier',
+  },
+  authNoticeBadge: {
+    backgroundColor: 'rgba(255, 0, 0, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 9999,
+  },
+  authNoticeBadgeText: {
+    color: '#FF6B6B',
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+    letterSpacing: 0.5,
+  },
+  authNoticeDesc: {
+    color: colors.primaryInk,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  authNoticeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  authNoticeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FF0000',
+    height: 38,
+    borderRadius: 10,
+  },
+  authNoticeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  quickConnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.quietStage,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.8)',
+  },
+  quickConnectBtnText: {
+    color: colors.primaryInk,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

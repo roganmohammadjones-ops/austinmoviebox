@@ -24,7 +24,16 @@ export default function AuthModalScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const { signIn, signUp, continueAsGuest, isLoading, error, clearError } = useAuthStore();
+  const {
+    signIn,
+    signUp,
+    signInWithGoogle,
+    signInWithYouTube,
+    continueAsGuest,
+    isLoading,
+    error,
+    clearError,
+  } = useAuthStore();
   const syncWithCloud = useFavoritesStore((state) => state.syncWithCloud);
 
   const handleSubmit = async () => {
@@ -48,6 +57,30 @@ export default function AuthModalScreen() {
         }
         router.back();
       }
+    }
+  };
+
+  const handleYouTubeSignIn = async () => {
+    if (error) clearError();
+    const res = await signInWithYouTube(email ? email.trim() : undefined);
+    if (res.success) {
+      const user = useAuthStore.getState().user;
+      if (user) {
+        await syncWithCloud(user.id);
+      }
+      router.back();
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (error) clearError();
+    const res = await signInWithGoogle(email ? email.trim() : undefined);
+    if (res.success) {
+      const user = useAuthStore.getState().user;
+      if (user) {
+        await syncWithCloud(user.id);
+      }
+      router.back();
     }
   };
 
@@ -93,29 +126,104 @@ export default function AuthModalScreen() {
 
               <View style={styles.memberPassBadge}>
                 <Ionicons name="ticket-outline" size={13} color={colors.cinemaAmber} />
-                <Text style={styles.memberPassText}>MEMBER PASS</Text>
+                <Text style={styles.memberPassText}>THEATRICAL PASS</Text>
               </View>
             </View>
 
             {/* Header & Supportive Copy */}
             <View style={styles.headerBlock}>
               <Text style={styles.headerTitle}>
-                {isSignUp ? 'Create Member Vault' : 'Welcome back'}
+                {isSignUp ? 'Create Member Vault' : 'Theatrical Access'}
               </Text>
               <Text style={styles.headerSubtitle}>
                 {isSignUp
-                  ? 'Register to automatically backup and synchronize your curated films across all devices.'
-                  : 'Sign in to access your synchronized film collection across all your devices.'}
+                  ? 'Register to unlock unrestricted official film trailers and synchronize your curated collection.'
+                  : 'Sign in to access HD theatrical trailers and synchronize your saved watchlist.'}
               </Text>
             </View>
 
-            {/* Form Inputs */}
+            {/* Theatrical Video Requirement Banner */}
+            <View style={styles.requirementBanner}>
+              <View style={styles.requirementHeader}>
+                <View style={styles.youtubeIconBadge}>
+                  <Ionicons name="logo-youtube" size={16} color="#FFFFFF" />
+                </View>
+                <Text style={styles.requirementTitle}>VIDEO WATCH REQUIREMENT</Text>
+              </View>
+              <Text style={styles.requirementText}>
+                Official movie trailers and age-restricted theatrical previews require an active{' '}
+                <Text style={styles.highlightText}>YouTube</Text> or{' '}
+                <Text style={styles.highlightText}>Google / Gmail</Text> account. Connect below for uninterrupted streaming.
+              </Text>
+            </View>
+
+            {/* Dedicated YouTube & Google Streaming Login Buttons */}
+            <View style={styles.socialButtonsGroup}>
+              {/* YouTube Sign In Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with YouTube"
+                disabled={isLoading}
+                onPress={handleYouTubeSignIn}
+                style={({ pressed }) => [
+                  styles.youtubeButton,
+                  { opacity: pressed || isLoading ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
+                ]}
+              >
+                <View style={styles.socialButtonLeft}>
+                  <View style={styles.youtubeRedCircle}>
+                    <Ionicons name="logo-youtube" size={18} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.socialTextGroup}>
+                    <Text style={styles.youtubeButtonText}>Continue with YouTube</Text>
+                    <Text style={styles.socialSubtext}>Unlocks all theatrical trailer streams</Text>
+                  </View>
+                </View>
+                <View style={styles.socialRightBadge}>
+                  <Text style={styles.socialRightBadgeText}>STREAM READY</Text>
+                </View>
+              </Pressable>
+
+              {/* Google / Gmail Sign In Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Google or Gmail"
+                disabled={isLoading}
+                onPress={handleGoogleSignIn}
+                style={({ pressed }) => [
+                  styles.googleButton,
+                  { opacity: pressed || isLoading ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
+                ]}
+              >
+                <View style={styles.socialButtonLeft}>
+                  <View style={styles.googleCircle}>
+                    <Ionicons name="logo-google" size={17} color={colors.cinemaAmber} />
+                  </View>
+                  <View style={styles.socialTextGroup}>
+                    <Text style={styles.googleButtonText}>Continue with Google / Gmail</Text>
+                    <Text style={styles.socialSubtext}>Connect via your Google account</Text>
+                  </View>
+                </View>
+                <View style={styles.googleRightBadge}>
+                  <Text style={styles.googleRightBadgeText}>VERIFIED GMAIL</Text>
+                </View>
+              </Pressable>
+            </View>
+
+            {/* Visual Divider to Passcode Form */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR WITH ARCHIVE PASSCODE</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Form Inputs (Alternative Email / Passcode Login) */}
             <View style={styles.formInputs}>
               {/* Email */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.inputLabel}>Email Address</Text>
-                  <Text style={styles.requiredText}>REQUIRED</Text>
+                  <Text style={styles.requiredText}>OPTIONAL FOR YOUTUBE</Text>
                 </View>
                 <View style={styles.inputWrapper}>
                   <Ionicons name="mail-outline" size={18} color={colors.mutedInk} style={styles.inputIcon} />
@@ -125,7 +233,7 @@ export default function AuthModalScreen() {
                       setEmail(val);
                       if (error) clearError();
                     }}
-                    placeholder="curator@cine.gallery"
+                    placeholder="curator@gmail.com"
                     placeholderTextColor={colors.mutedInk}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -139,7 +247,7 @@ export default function AuthModalScreen() {
               {/* Password */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Password</Text>
+                  <Text style={styles.inputLabel}>Archive Passcode</Text>
                   <Text style={styles.requiredText}>
                     {isSignUp ? 'MIN 6 CHARS' : 'PASSCODE'}
                   </Text>
@@ -204,17 +312,10 @@ export default function AuthModalScreen() {
               </Pressable>
             </View>
 
-            {/* Visual Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>SYNC OR PREVIEW</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
             {/* Switch between Sign In / Sign Up */}
             <View style={styles.switchRow}>
               <Text style={styles.switchQuestion}>
-                {isSignUp ? 'Already have a vault?' : 'Don’t have an account?'}
+                {isSignUp ? 'Already have an archive account?' : 'Need a separate archive pass?'}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -239,7 +340,9 @@ export default function AuthModalScreen() {
               <Ionicons name="compass-outline" size={18} color={colors.secondaryInk} />
               <Text style={styles.guestBtnText}>Continue as guest explorer</Text>
             </Pressable>
-            <Text style={styles.guestSubtext}>Browse curated lists without cloud sync</Text>
+            <Text style={styles.guestSubtext}>
+              Browse catalog without cloud sync (Trailers may prompt for YouTube sign-in)
+            </Text>
           </View>
 
           {/* Editorial Footer Note */}
@@ -302,7 +405,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   brandMark: {
     flexDirection: 'row',
@@ -345,11 +448,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
   },
   headerBlock: {
-    marginBottom: 24,
+    marginBottom: 18,
   },
   headerTitle: {
     color: colors.primaryInk,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.4,
     marginBottom: 6,
@@ -358,6 +461,167 @@ const styles = StyleSheet.create({
     color: colors.secondaryInk,
     fontSize: 13,
     lineHeight: 18,
+  },
+  requirementBanner: {
+    backgroundColor: 'rgba(229, 9, 20, 0.08)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(229, 9, 20, 0.25)',
+    marginBottom: 20,
+    gap: 6,
+  },
+  requirementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  youtubeIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FF0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requirementTitle: {
+    color: '#FF4D4D',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+  },
+  requirementText: {
+    color: colors.primaryInk,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  highlightText: {
+    color: colors.cinemaAmber,
+    fontWeight: '700',
+  },
+  socialButtonsGroup: {
+    gap: 12,
+    marginBottom: 18,
+  },
+  youtubeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1C1517',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 0, 0, 0.45)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#FF0000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.quietStage,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.8)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  socialButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  youtubeRedCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FF0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 197, 24, 0.3)',
+  },
+  socialTextGroup: {
+    flex: 1,
+  },
+  youtubeButtonText: {
+    color: colors.primaryInk,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  googleButtonText: {
+    color: colors.primaryInk,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  socialSubtext: {
+    color: colors.secondaryInk,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  socialRightBadge: {
+    backgroundColor: 'rgba(255, 0, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 0, 0.3)',
+  },
+  socialRightBadgeText: {
+    color: '#FF6B6B',
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+    letterSpacing: 0.6,
+  },
+  googleRightBadge: {
+    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 197, 24, 0.3)',
+  },
+  googleRightBadgeText: {
+    color: colors.cinemaAmber,
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+    letterSpacing: 0.6,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(53, 56, 60, 0.4)',
+  },
+  dividerText: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
   },
   formInputs: {
     gap: 16,
@@ -420,14 +684,14 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     width: '100%',
-    height: 52,
+    height: 50,
     borderRadius: 14,
     backgroundColor: colors.cinemaAmber,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 6,
+    marginTop: 4,
     shadowColor: colors.cinemaAmber,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -436,42 +700,25 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     color: colors.cinemaCanvas,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(53, 56, 60, 0.4)',
-  },
-  dividerText: {
-    color: colors.mutedInk,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    fontFamily: 'Courier',
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginBottom: 16,
+    marginTop: 18,
+    marginBottom: 12,
   },
   switchQuestion: {
     color: colors.secondaryInk,
-    fontSize: 13,
+    fontSize: 12,
   },
   switchAction: {
     color: colors.cinemaAmber,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   guestBtn: {
@@ -479,7 +726,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 44,
+    height: 40,
   },
   guestBtnText: {
     color: colors.secondaryInk,
@@ -492,6 +739,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Courier',
     marginTop: 2,
+    lineHeight: 15,
   },
   footerRow: {
     flexDirection: 'row',

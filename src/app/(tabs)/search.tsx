@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,7 +24,8 @@ import { colors } from '../../theme/tokens';
 import { Movie } from '../../types';
 
 export default function SearchScreen() {
-  const [query, setQuery] = useState('');
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(params.q || '');
   const [selectedGenreId, setSelectedGenreId] = useState<number>(0);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
