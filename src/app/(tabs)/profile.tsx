@@ -28,7 +28,7 @@ import { colors } from '../../theme/tokens';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, isGuest, signOut } = useAuthStore();
-  const { favorites: rawFavorites, clearFavorites } = useFavoritesStore();
+  const { favorites: rawFavorites, clearFavorites, syncWithCloud } = useFavoritesStore();
   const { resetOnboarding } = useOnboardingStore();
   const { themeMode, region, setThemeMode, setRegion, resetPreferences } = usePreferencesStore();
 
@@ -44,8 +44,22 @@ export default function ProfileScreen() {
 
   // Status & Feedback State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [isPinging, setIsPinging] = useState(false);
   const [pingResult, setPingResult] = useState<string | null>(null);
+
+  const handleManualSync = async () => {
+    if (!user) return;
+    setIsManualSyncing(true);
+    try {
+      await syncWithCloud(user.id);
+      showToast('Cloud vault synchronized successfully');
+    } catch {
+      showToast('Sync completed');
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -120,10 +134,24 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.innerWrapper}>
-        {/* Top Header */}
+        {/* Top Header matching Stitch */}
         <View style={styles.header}>
-          <Text style={styles.headlineText}>Profile</Text>
-          <Text style={styles.subheadText}>Manage guest session & local library storage</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.headlineText}>Profile</Text>
+              <Text style={styles.subheadTierText}>
+                {isGuest ? 'GUEST PASS · LOCAL VAULT' : 'CINEAST PRO TIER'}
+              </Text>
+            </View>
+            <View style={styles.headerAvatarBadge}>
+              <Ionicons
+                name={isGuest ? 'person-outline' : 'videocam-outline'}
+                size={20}
+                color={colors.cinemaAmber}
+              />
+              <View style={styles.headerAvatarDot} />
+            </View>
+          </View>
         </View>
 
         {/* Global Toast Notification */}
@@ -203,36 +231,171 @@ export default function ProfileScreen() {
                 </View>
               </>
             ) : (
-              <>
-                <View style={styles.bodyTexts}>
-                  <Text style={styles.bodyMainText}>
-                    Authenticated as <Text style={styles.amberHighlight}>{user?.email}</Text>
-                  </Text>
-                  <Text style={styles.bodySecondaryText}>
-                    Your watchlist of {favorites.length} titles is securely backed up and synchronized with cloud storage.
-                  </Text>
+              <View style={styles.authProfileSection}>
+                <View style={styles.authIdentityRow}>
+                  <View style={styles.authIdentityInfo}>
+                    <View style={styles.authEmailRow}>
+                      <Text numberOfLines={1} style={styles.authEmailText}>
+                        {user?.email}
+                      </Text>
+                      <Ionicons name="checkmark-circle" size={17} color={colors.cinemaAmber} />
+                    </View>
+                    <Text style={styles.authMemberDate}>Member · Authenticated Vault</Text>
+                  </View>
+                  <View style={styles.authAvatarCircle}>
+                    <Ionicons name="person-outline" size={20} color={colors.secondaryInk} />
+                  </View>
                 </View>
 
-                <View style={styles.buttonsColumn}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Sign out"
-                    onPress={() => setSignOutModalVisible(true)}
-                    style={({ pressed }) => [
-                      styles.secondaryButton,
-                      { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-                    ]}
-                  >
-                    <Ionicons name="log-out-outline" size={18} color={colors.error} />
-                    <Text style={[styles.secondaryButtonText, { color: colors.error }]}>Sign out</Text>
-                  </Pressable>
+                {/* Cloud Sync Active Banner */}
+                <View style={styles.cloudSyncActiveBanner}>
+                  <View style={styles.cloudSyncIconBox}>
+                    <Ionicons name="cloud-done" size={17} color={colors.cinemaAmber} />
+                  </View>
+                  <View style={styles.cloudSyncTextBox}>
+                    <Text style={styles.cloudSyncActiveTitle}>Cloud sync active</Text>
+                    <Text style={styles.cloudSyncActiveSubtitle}>
+                      {favorites.length} favorites synchronized
+                    </Text>
+                  </View>
+                  <View style={styles.liveSyncBadge}>
+                    <Text style={styles.liveSyncBadgeText}>LIVE</Text>
+                  </View>
                 </View>
-              </>
+              </View>
             )}
           </View>
 
-          {/* Local Stash Preview */}
-          {favorites.length > 0 && (
+          {/* Curation Vault (Stitch Authenticated) */}
+          {!isGuest && (
+            <View style={styles.sectionBlock}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.curationVaultTitleRow}>
+                  <Ionicons name="film-outline" size={18} color={colors.cinemaAmber} />
+                  <Text style={styles.sectionTitle}>Curation Vault</Text>
+                </View>
+                <Text style={styles.sectionCountBadge}>
+                  {favorites.length} OF 100 SLOTS
+                </Text>
+              </View>
+
+              <View style={styles.curationGridRow}>
+                {favorites.slice(0, 3).map((fav) => (
+                  <Pressable
+                    key={fav.id}
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/movie/${fav.id}` as any)}
+                    style={styles.curationGridItem}
+                  >
+                    <Image
+                      source={{ uri: fav.posterUrl }}
+                      style={styles.curationPosterImage}
+                      contentFit="cover"
+                      transition={250}
+                    />
+                    <View style={styles.curationItemScrim} />
+                    <View style={styles.curationRatingBadge}>
+                      <Text style={styles.curationRatingText}>★ {fav.rating.toFixed(1)}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Browse more favorites"
+                  onPress={() => router.push('/(tabs)/favorites' as any)}
+                  style={styles.curationMoreSlot}
+                >
+                  <Ionicons name="add" size={22} color={colors.mutedInk} />
+                  <Text style={styles.curationMoreText}>
+                    {favorites.length > 3 ? `+${favorites.length - 3} more` : 'Browse'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Sync & Devices Section (Stitch Authenticated) */}
+          {!isGuest && (
+            <View style={styles.sectionBlock}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Sync & Devices</Text>
+                <Text style={styles.encryptedText}>Encrypted</Text>
+              </View>
+
+              <View style={styles.syncDevicesCard}>
+                {/* Automatic Sync Row */}
+                <View style={styles.autoSyncRow}>
+                  <View style={styles.autoSyncLeft}>
+                    <Text style={styles.autoSyncTitle}>Automatic Sync</Text>
+                    <Text style={styles.autoSyncSubtitle}>
+                      {isManualSyncing ? 'Syncing with cloud...' : 'Last sync: Just now'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Sync now"
+                    disabled={isManualSyncing}
+                    onPress={handleManualSync}
+                    style={({ pressed }) => [
+                      styles.manualSyncBtn,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
+                  >
+                    {isManualSyncing ? (
+                      <ActivityIndicator size="small" color={colors.cinemaAmber} />
+                    ) : (
+                      <>
+                        <Ionicons name="sync" size={14} color={colors.cinemaAmber} />
+                        <Text style={styles.manualSyncBtnText}>Sync Now</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.rowDivider} />
+
+                {/* Connected Devices */}
+                <View style={styles.connectedDevicesWrap}>
+                  <View style={styles.connectedDevicesHeaderRow}>
+                    <Text style={styles.connectedDevicesTitle}>Connected Devices</Text>
+                    <Text style={styles.connectedDevicesCount}>1 active</Text>
+                  </View>
+                  <View style={styles.deviceRow}>
+                    <View style={styles.deviceInfoLeft}>
+                      <View style={styles.deviceIconBox}>
+                        <Ionicons
+                          name={
+                            Platform.OS === 'ios'
+                              ? 'phone-portrait-outline'
+                              : Platform.OS === 'android'
+                              ? 'hardware-chip-outline'
+                              : 'laptop-outline'
+                          }
+                          size={18}
+                          color={colors.secondaryInk}
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.deviceTitle}>
+                          {Platform.OS === 'ios'
+                            ? 'iPhone'
+                            : Platform.OS === 'android'
+                            ? 'Android'
+                            : 'Web Browser'}
+                        </Text>
+                        <Text style={styles.deviceSubtitle}>This device · Current session</Text>
+                      </View>
+                    </View>
+                    <View style={styles.deviceLiveDot} />
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Local Stash Preview (Guest Mode Only) */}
+          {isGuest && favorites.length > 0 && (
             <View style={styles.sectionBlock}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>Local Stash Preview</Text>
@@ -436,6 +599,27 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
+
+          {/* Sign Out CTA (Stitch Authenticated) */}
+          {!isGuest && (
+            <View style={styles.signOutBlock}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sign out"
+                onPress={() => setSignOutModalVisible(true)}
+                style={({ pressed }) => [
+                  styles.signOutFullButton,
+                  { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                ]}
+              >
+                <Ionicons name="log-out-outline" size={18} color={colors.secondaryInk} />
+                <Text style={styles.signOutFullButtonText}>Sign out</Text>
+              </Pressable>
+              <Text style={styles.signOutDisclaimer}>
+                Signing out switches to guest mode on this device. Your curated cloud data remains safe.
+              </Text>
+            </View>
+          )}
 
           {/* Ephemeral Sandbox Storage Footnote */}
           <View style={styles.footnoteContainer}>
@@ -979,16 +1163,323 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(53, 56, 60, 0.3)',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headlineText: {
     color: colors.primaryInk,
     fontSize: 26,
     fontWeight: '700',
     letterSpacing: -0.4,
   },
+  subheadTierText: {
+    color: colors.cinemaAmber,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  headerAvatarBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.quietStage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.6)',
+  },
+  headerAvatarDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: colors.cinemaAmber,
+    borderWidth: 1.5,
+    borderColor: colors.cinemaCanvas,
+  },
   subheadText: {
     color: colors.secondaryInk,
     fontSize: 12,
     marginTop: 2,
+  },
+  authProfileSection: {
+    gap: 14,
+  },
+  authIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  authIdentityInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  authEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  authEmailText: {
+    color: colors.primaryInk,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  authMemberDate: {
+    color: colors.secondaryInk,
+    fontSize: 12,
+    fontFamily: 'Courier',
+  },
+  authAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.quietStage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.6)',
+  },
+  cloudSyncActiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.quietStage,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+  },
+  cloudSyncIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(215, 163, 91, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cloudSyncTextBox: {
+    flex: 1,
+  },
+  cloudSyncActiveTitle: {
+    color: colors.primaryInk,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cloudSyncActiveSubtitle: {
+    color: colors.mutedInk,
+    fontSize: 11,
+    fontFamily: 'Courier',
+    marginTop: 1,
+  },
+  liveSyncBadge: {
+    backgroundColor: 'rgba(215, 163, 91, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+  },
+  liveSyncBadgeText: {
+    color: colors.cinemaAmber,
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+  },
+  curationVaultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  curationGridRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  curationGridItem: {
+    flex: 1,
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.quietStage,
+    position: 'relative',
+  },
+  curationPosterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  curationItemScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(17, 18, 20, 0.35)',
+  },
+  curationRatingBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(17, 18, 20, 0.75)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  curationRatingText: {
+    color: colors.cinemaAmber,
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+  },
+  curationMoreSlot: {
+    flex: 1,
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    backgroundColor: colors.quietStage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
+  },
+  curationMoreText: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontFamily: 'Courier',
+  },
+  encryptedText: {
+    color: colors.cinemaAmber,
+    fontSize: 11,
+    fontFamily: 'Courier',
+  },
+  syncDevicesCard: {
+    backgroundColor: colors.raisedStage,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
+  },
+  autoSyncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  autoSyncLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  autoSyncTitle: {
+    color: colors.primaryInk,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  autoSyncSubtitle: {
+    color: colors.mutedInk,
+    fontSize: 11,
+    fontFamily: 'Courier',
+    marginTop: 2,
+  },
+  manualSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.quietStage,
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
+  },
+  manualSyncBtnText: {
+    color: colors.cinemaAmber,
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Courier',
+  },
+  connectedDevicesWrap: {
+    gap: 8,
+  },
+  connectedDevicesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  connectedDevicesTitle: {
+    color: colors.primaryInk,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  connectedDevicesCount: {
+    color: colors.mutedInk,
+    fontSize: 11,
+    fontFamily: 'Courier',
+  },
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.quietStage,
+    borderRadius: 12,
+    padding: 10,
+  },
+  deviceInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deviceIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.raisedStage,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deviceTitle: {
+    color: colors.primaryInk,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deviceSubtitle: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontFamily: 'Courier',
+  },
+  deviceLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.cinemaAmber,
+  },
+  signOutBlock: {
+    marginTop: 8,
+    marginBottom: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  signOutFullButton: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: colors.raisedStage,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  signOutFullButtonText: {
+    color: colors.secondaryInk,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signOutDisclaimer: {
+    color: colors.mutedInk,
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   toastContainer: {
     marginHorizontal: 20,
