@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,19 +15,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MovieHero } from '../../components/movie-hero';
 import { MovieRail } from '../../components/movie-rail';
 import {
-  getNewReleasesMovies,
-  getPopularMovies,
-  getSpotlightMovie,
-  getTopRatedMovies,
-  getTrendingMovies,
-} from '../../data/movies';
+  fetchNewReleasesMovies,
+  fetchPopularMovies,
+  fetchTopRatedMovies,
+  fetchTrendingMovies,
+} from '../../services/movie-api';
 import { useAuthStore } from '../../stores/auth-store';
 import { colors } from '../../theme/tokens';
+import { Movie } from '../../types';
 
 export default function HomeScreen() {
   const router = useRouter();
   const isGuest = useAuthStore((state) => state.isGuest);
   const { width: windowWidth } = useWindowDimensions();
+
+  const [trendingMovies, setTrendingMovies] = useState<Movie[]>([]);
+  const [popularMovies, setPopularMovies] = useState<Movie[]>([]);
+  const [topRatedMovies, setTopRatedMovies] = useState<Movie[]>([]);
+  const [newReleasesMovies, setNewReleasesMovies] = useState<Movie[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isSmall = windowWidth <= 360;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -38,11 +48,51 @@ export default function HomeScreen() {
     return 20;
   }, [isDesktop, isTablet, isSmall]);
 
-  const spotlightMovie = getSpotlightMovie();
-  const trendingMovies = getTrendingMovies();
-  const popularMovies = getPopularMovies();
-  const topRatedMovies = getTopRatedMovies();
-  const newReleasesMovies = getNewReleasesMovies();
+  const loadMovies = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const [trending, popular, topRated, newReleases] = await Promise.all([
+        fetchTrendingMovies(),
+        fetchPopularMovies(),
+        fetchTopRatedMovies(),
+        fetchNewReleasesMovies(),
+      ]);
+
+      setTrendingMovies(trending);
+      setPopularMovies(popular);
+      setTopRatedMovies(topRated);
+      setNewReleasesMovies(newReleases);
+
+      if (
+        trending.length === 0 &&
+        popular.length === 0 &&
+        topRated.length === 0 &&
+        newReleases.length === 0
+      ) {
+        setError('No movies returned from TMDB API. Please verify your connection.');
+      }
+    } catch (err: any) {
+      console.error('[HomeScreen] Error loading movies from TMDB:', err);
+      setError(err?.message || 'Failed to load movies from TMDB.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMovies();
+  }, [loadMovies]);
+
+  const spotlightMovie = useMemo(() => {
+    return trendingMovies[0] || popularMovies[0] || null;
+  }, [trendingMovies, popularMovies]);
 
   const handleProfilePress = () => {
     if (isGuest) {
@@ -119,54 +169,82 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: isDesktop ? 60 : 96 },
-          ]}
-        >
-          {/* Featured Hero Billboard */}
-          {spotlightMovie ? (
-            <View
-              style={[
-                styles.heroPadding,
-                {
-                  paddingHorizontal: horizontalPadding,
-                  paddingTop: isSmall ? 12 : 16,
-                },
-              ]}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.cinemaAmber} />
+            <Text style={styles.loadingText}>Accessing Theatrical Vault...</Text>
+          </View>
+        ) : error && !spotlightMovie ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="cloud-offline-outline" size={44} color={colors.cinemaAmber} />
+            <Text style={styles.errorTitle}>Vault Connection Error</Text>
+            <Text style={styles.errorSubtitle}>{error}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => loadMovies(false)}
+              style={styles.retryButton}
             >
-              <MovieHero movie={spotlightMovie} />
-            </View>
-          ) : null}
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={() => loadMovies(true)}
+                tintColor={colors.cinemaAmber}
+                colors={[colors.cinemaAmber]}
+              />
+            }
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: isDesktop ? 60 : 96 },
+            ]}
+          >
+            {/* Featured Hero Billboard */}
+            {spotlightMovie ? (
+              <View
+                style={[
+                  styles.heroPadding,
+                  {
+                    paddingHorizontal: horizontalPadding,
+                    paddingTop: isSmall ? 12 : 16,
+                  },
+                ]}
+              >
+                <MovieHero movie={spotlightMovie} />
+              </View>
+            ) : null}
 
-          {/* Canonical Horizontal Rails (DESIGN.md §30) */}
-          <MovieRail
-            title="Trending Now"
-            movies={trendingMovies || []}
-            onSeeAllPress={handleSeeAll}
-          />
+            {/* Canonical Horizontal Rails from Live TMDB */}
+            <MovieRail
+              title="Trending Now"
+              movies={trendingMovies || []}
+              onSeeAllPress={handleSeeAll}
+            />
 
-          <MovieRail
-            title="Popular Movies"
-            movies={popularMovies || []}
-            onSeeAllPress={handleSeeAll}
-          />
+            <MovieRail
+              title="Popular Movies"
+              movies={popularMovies || []}
+              onSeeAllPress={handleSeeAll}
+            />
 
-          <MovieRail
-            title="Top Rated"
-            movies={topRatedMovies || []}
-            onSeeAllPress={handleSeeAll}
-          />
+            <MovieRail
+              title="Top Rated"
+              movies={topRatedMovies || []}
+              onSeeAllPress={handleSeeAll}
+            />
 
-          <MovieRail
-            title="New Releases"
-            movies={newReleasesMovies || []}
-            onSeeAllPress={handleSeeAll}
-          />
-        </ScrollView>
+            <MovieRail
+              title="New Releases"
+              movies={newReleasesMovies || []}
+              onSeeAllPress={handleSeeAll}
+            />
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -189,6 +267,50 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  loadingText: {
+    color: colors.secondaryInk,
+    fontSize: 13,
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+    textTransform: 'uppercase',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  errorTitle: {
+    color: colors.primaryInk,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  errorSubtitle: {
+    color: colors.secondaryInk,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 360,
+  },
+  retryButton: {
+    marginTop: 10,
+    backgroundColor: colors.cinemaAmber,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: colors.cinemaCanvas,
+    fontWeight: '700',
+    fontSize: 13,
   },
   header: {
     flexDirection: 'row',

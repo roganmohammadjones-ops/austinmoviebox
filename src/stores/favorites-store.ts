@@ -1,14 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { MOVIES } from '../data/movies';
 import {
   syncFavoritesWithCloud,
   uploadFavoriteToCloud,
   removeFavoriteFromCloud,
 } from '../services/cloud-sync';
+import { fetchMovieDetails } from '../services/movie-api';
 import { Movie } from '../types';
 
 const FAVORITES_STORAGE_KEY = '@moviebox_favorites';
+
+// Legacy dummy IDs to purge if previously saved in local storage
+const DUMMY_SLUG_IDS = new Set([
+  'dune-2',
+  'oppenheimer',
+  'spider-verse-2',
+  'the-dark-knight',
+  'interstellar',
+  'inception',
+  'blade-runner-2049',
+  'the-batman',
+  'parasite',
+  'eeaao',
+  'whiplash',
+  'gladiator',
+]);
 
 interface FavoritesState {
   favorites: Movie[];
@@ -39,7 +55,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
           parsed = null;
         }
 
-        // Handle possible object wrappers, e.g. { favorites: [...] } or Zustand persist { state: { favorites: [...] } }
+        // Handle possible object wrappers, e.g. { favorites: [...] } or Zustand persist
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           if (Array.isArray(parsed.favorites)) {
             parsed = parsed.favorites;
@@ -49,18 +65,24 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
         }
 
         if (Array.isArray(parsed)) {
-          // If stored as string IDs, match back to catalog; if Movie objects, keep them
-          const resolved: Movie[] = parsed
-            .map((item: any) => {
-              if (typeof item === 'string') {
-                return MOVIES.find((m) => m.id === item) || null;
+          const resolved: Movie[] = [];
+          for (const item of parsed) {
+            if (
+              item &&
+              typeof item === 'object' &&
+              typeof item.id === 'string' &&
+              !DUMMY_SLUG_IDS.has(item.id)
+            ) {
+              resolved.push(item as Movie);
+            } else if (typeof item === 'string' && !DUMMY_SLUG_IDS.has(item)) {
+              try {
+                const movie = await fetchMovieDetails(item);
+                if (movie) resolved.push(movie);
+              } catch {
+                // skip unresolvable
               }
-              if (item && typeof item === 'object' && typeof item.id === 'string') {
-                return item as Movie;
-              }
-              return null;
-            })
-            .filter((m): m is Movie => m !== null);
+            }
+          }
 
           set({ favorites: resolved, isHydrated: true });
           await AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(resolved));
@@ -68,18 +90,11 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
         }
       }
 
-      // Seed initial 4 titles from Stitch design
-      const initial = [MOVIES[7], MOVIES[8], MOVIES[9], MOVIES[0]].filter(
-        (m): m is Movie => Boolean(m && m.id)
-      );
-      await AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(initial));
-      set({ favorites: initial, isHydrated: true });
+      // No dummy seeding — start with a clean vault
+      set({ favorites: [], isHydrated: true });
     } catch (e) {
       console.warn('Failed to hydrate favorites:', e);
-      const fallback = [MOVIES[7], MOVIES[8], MOVIES[9], MOVIES[0]].filter(
-        (m): m is Movie => Boolean(m && m.id)
-      );
-      set({ favorites: fallback, isHydrated: true });
+      set({ favorites: [], isHydrated: true });
     }
   },
 

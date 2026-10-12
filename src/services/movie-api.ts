@@ -1,18 +1,11 @@
 /**
  * MovieBox — TMDB & Movie Data API Service
  * 
- * Provides seamless integration with The Movie Database (TMDB) API
- * with graceful fallback to curated local data when unconfigured or offline.
+ * Direct, live integration with The Movie Database (TMDB) API.
+ * Pure TMDB API data with zero dummy or hardcoded mock fallbacks.
  */
 
 import { Movie } from '../types';
-import {
-  MOVIES,
-  getNewReleasesMovies,
-  getPopularMovies,
-  getTopRatedMovies,
-  getTrendingMovies,
-} from '../data/movies';
 
 // TMDB Configuration from environment variables
 const rawApiKey = process.env.EXPO_PUBLIC_TMDB_API_KEY?.trim() || '';
@@ -23,7 +16,7 @@ const imageBaseUrl =
   process.env.EXPO_PUBLIC_TMDB_IMAGE_BASE_URL?.trim() || 'https://image.tmdb.org/t/p';
 
 /**
- * Checks whether TMDB is configured with valid credentials (not placeholder tokens)
+ * Checks whether TMDB is configured with valid credentials
  */
 export const isTmdbConfigured: boolean = Boolean(
   (rawApiKey &&
@@ -43,7 +36,7 @@ export const TMDB_CONFIG = {
 };
 
 /**
- * Builds request headers for TMDB API (supports either v4 Access Token Bearer or v3 API Key query)
+ * Builds request headers for TMDB API
  */
 function getHeaders(): HeadersInit {
   const headers: Record<string, string> = {
@@ -59,26 +52,29 @@ function getHeaders(): HeadersInit {
 }
 
 /**
- * Builds the URL with API key appended if Bearer token is not in use
+ * Builds the URL with API key and query parameters
  */
-function buildUrl(endpoint: string, params: Record<string, string> = {}): string {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  
-  if (!rawAccessToken && rawApiKey) {
+function buildUrl(endpoint: string, params: Record<string, string | number> = {}): string {
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = new URL(`${baseUrl}${cleanEndpoint}`);
+
+  if (rawApiKey && !rawApiKey.includes('your_tmdb_api_key')) {
     url.searchParams.set('api_key', rawApiKey);
   }
 
   Object.entries(params).forEach(([key, value]) => {
-    url.searchParams.set(key, value);
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
   });
 
   return url.toString();
 }
 
 /**
- * Helper to map TMDB genre IDs to human-readable names
+ * TMDB Genre ID to Name Mapping
  */
-const TMDB_GENRES: Record<number, string> = {
+export const TMDB_GENRES: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
   16: 'Animation',
@@ -101,57 +97,136 @@ const TMDB_GENRES: Record<number, string> = {
 };
 
 /**
- * Maps TMDB movie object to internal Movie entity
+ * Canonical list of TMDB genres for filters
+ */
+export const TMDB_GENRES_LIST: { id: number; name: string }[] = [
+  { id: 0, name: 'All' },
+  { id: 28, name: 'Action' },
+  { id: 12, name: 'Adventure' },
+  { id: 16, name: 'Animation' },
+  { id: 35, name: 'Comedy' },
+  { id: 80, name: 'Crime' },
+  { id: 99, name: 'Documentary' },
+  { id: 18, name: 'Drama' },
+  { id: 10751, name: 'Family' },
+  { id: 14, name: 'Fantasy' },
+  { id: 36, name: 'History' },
+  { id: 27, name: 'Horror' },
+  { id: 10402, name: 'Music' },
+  { id: 9648, name: 'Mystery' },
+  { id: 10749, name: 'Romance' },
+  { id: 878, name: 'Sci-Fi' },
+  { id: 53, name: 'Thriller' },
+  { id: 10752, name: 'War' },
+  { id: 37, name: 'Western' },
+];
+
+/**
+ * Maps raw TMDB movie payload to internal Movie entity using strictly available data.
+ * No dummy ratings, durations, or fictional crew entries.
  */
 export function mapTmdbMovie(tmdbMovie: any): Movie {
-  const releaseDate = tmdbMovie.release_date || '';
-  const releaseYear = releaseDate ? parseInt(releaseDate.substring(0, 4), 10) || 2024 : 2024;
-  
+  if (!tmdbMovie || !tmdbMovie.id) {
+    throw new Error('Invalid TMDB movie response');
+  }
+
+  const releaseDate: string = tmdbMovie.release_date || '';
+  const releaseYear: number = releaseDate
+    ? parseInt(releaseDate.substring(0, 4), 10) || 0
+    : 0;
+
   const posterUrl = tmdbMovie.poster_path
     ? `${imageBaseUrl}/w780${tmdbMovie.poster_path}`
-    : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=780&q=80';
+    : tmdbMovie.backdrop_path
+    ? `${imageBaseUrl}/w780${tmdbMovie.backdrop_path}`
+    : '';
 
   const backdropUrl = tmdbMovie.backdrop_path
     ? `${imageBaseUrl}/w1280${tmdbMovie.backdrop_path}`
     : posterUrl;
 
-  const genres: string[] = Array.isArray(tmdbMovie.genres)
-    ? tmdbMovie.genres.map((g: any) => g.name)
-    : Array.isArray(tmdbMovie.genre_ids)
-    ? tmdbMovie.genre_ids.map((id: number) => TMDB_GENRES[id] || 'Cinema')
-    : ['Cinema'];
+  const genres: string[] =
+    Array.isArray(tmdbMovie.genres) && tmdbMovie.genres.length > 0
+      ? tmdbMovie.genres.map((g: any) => g.name || '').filter(Boolean)
+      : Array.isArray(tmdbMovie.genre_ids) && tmdbMovie.genre_ids.length > 0
+      ? tmdbMovie.genre_ids.map((id: number) => TMDB_GENRES[id] || '').filter(Boolean)
+      : [];
 
-  const cast = tmdbMovie.credits?.cast?.slice(0, 5).map((actor: any) => ({
-    name: actor.name,
-    character: actor.character,
-    avatarUrl: actor.profile_path ? `${imageBaseUrl}/w185${actor.profile_path}` : undefined,
-  }));
+  const cast = tmdbMovie.credits?.cast
+    ? tmdbMovie.credits.cast.slice(0, 10).map((actor: any) => ({
+        name: actor.name || 'Unknown',
+        character: actor.character || '',
+        avatarUrl: actor.profile_path ? `${imageBaseUrl}/w185${actor.profile_path}` : undefined,
+      }))
+    : undefined;
 
-  const director = tmdbMovie.credits?.crew?.find((crew: any) => crew.job === 'Director')?.name;
+  const director = tmdbMovie.credits?.crew?.find(
+    (crew: any) => crew.job === 'Director'
+  )?.name;
+
+  const cinematography = tmdbMovie.credits?.crew?.find(
+    (crew: any) => crew.job === 'Director of Photography' || crew.job === 'Cinematographer'
+  )?.name;
+
+  const sound = tmdbMovie.credits?.crew?.find(
+    (crew: any) => crew.job === 'Original Music Composer' || crew.job === 'Music'
+  )?.name;
+
+  const studio = tmdbMovie.production_companies?.[0]?.name;
+
+  // Real age rating from release_dates (US certification preferred, fallback to any available)
+  let ageRating: string | undefined;
+  if (tmdbMovie.release_dates?.results && Array.isArray(tmdbMovie.release_dates.results)) {
+    const usRelease = tmdbMovie.release_dates.results.find((r: any) => r.iso_3166_1 === 'US');
+    const usCert = usRelease?.release_dates?.find((rd: any) => rd.certification?.trim())?.certification?.trim();
+    if (usCert) {
+      ageRating = usCert;
+    } else {
+      const anyCert = tmdbMovie.release_dates.results
+        .flatMap((r: any) => r.release_dates || [])
+        .find((rd: any) => rd.certification?.trim())?.certification?.trim();
+      if (anyCert) {
+        ageRating = anyCert;
+      }
+    }
+  }
+
+  const rating =
+    typeof tmdbMovie.vote_average === 'number'
+      ? Number(tmdbMovie.vote_average.toFixed(1))
+      : 0;
+
+  const durationMinutes =
+    typeof tmdbMovie.runtime === 'number' ? tmdbMovie.runtime : 0;
 
   return {
     id: String(tmdbMovie.id),
-    title: tmdbMovie.title || 'Untitled',
-    overview: tmdbMovie.overview || 'No overview available.',
+    title: tmdbMovie.title || tmdbMovie.original_title || 'Untitled',
+    overview: tmdbMovie.overview || '',
     posterUrl,
     backdropUrl,
-    rating: Number((tmdbMovie.vote_average || 7.0).toFixed(1)),
+    rating,
     releaseYear,
-    genres: genres.length > 0 ? genres : ['Cinema'],
-    durationMinutes: tmdbMovie.runtime || 120,
+    genres,
+    durationMinutes,
     director,
     cast,
-    tagline: tmdbMovie.tagline || undefined,
+    tagline: tmdbMovie.tagline?.trim() || undefined,
     releaseDate,
+    ageRating,
+    cinematography,
+    sound,
+    studio,
   };
 }
 
 /**
- * Fetches trending movies (fallback to local curated trending)
+ * Fetches trending movies from TMDB
  */
 export async function fetchTrendingMovies(): Promise<Movie[]> {
   if (!isTmdbConfigured) {
-    return getTrendingMovies();
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
   }
 
   try {
@@ -160,19 +235,20 @@ export async function fetchTrendingMovies(): Promise<Movie[]> {
     });
     if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
     const data = await res.json();
-    return (data.results || []).slice(0, 10).map(mapTmdbMovie);
+    return (data.results || []).map(mapTmdbMovie);
   } catch (error) {
-    console.warn('[TMDB] Failed to fetch trending movies, using local fallback:', error);
-    return getTrendingMovies();
+    console.error('[TMDB] Failed to fetch trending movies:', error);
+    return [];
   }
 }
 
 /**
- * Fetches popular movies (fallback to local curated popular)
+ * Fetches popular movies from TMDB
  */
 export async function fetchPopularMovies(): Promise<Movie[]> {
   if (!isTmdbConfigured) {
-    return getPopularMovies();
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
   }
 
   try {
@@ -181,19 +257,20 @@ export async function fetchPopularMovies(): Promise<Movie[]> {
     });
     if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
     const data = await res.json();
-    return (data.results || []).slice(0, 10).map(mapTmdbMovie);
+    return (data.results || []).map(mapTmdbMovie);
   } catch (error) {
-    console.warn('[TMDB] Failed to fetch popular movies, using local fallback:', error);
-    return getPopularMovies();
+    console.error('[TMDB] Failed to fetch popular movies:', error);
+    return [];
   }
 }
 
 /**
- * Fetches top rated movies (fallback to local curated top rated)
+ * Fetches top rated movies from TMDB
  */
 export async function fetchTopRatedMovies(): Promise<Movie[]> {
   if (!isTmdbConfigured) {
-    return getTopRatedMovies();
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
   }
 
   try {
@@ -202,19 +279,20 @@ export async function fetchTopRatedMovies(): Promise<Movie[]> {
     });
     if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
     const data = await res.json();
-    return (data.results || []).slice(0, 10).map(mapTmdbMovie);
+    return (data.results || []).map(mapTmdbMovie);
   } catch (error) {
-    console.warn('[TMDB] Failed to fetch top rated movies, using local fallback:', error);
-    return getTopRatedMovies();
+    console.error('[TMDB] Failed to fetch top rated movies:', error);
+    return [];
   }
 }
 
 /**
- * Fetches new release / now playing movies (fallback to local curated new releases)
+ * Fetches new release / now playing movies from TMDB
  */
 export async function fetchNewReleasesMovies(): Promise<Movie[]> {
   if (!isTmdbConfigured) {
-    return getNewReleasesMovies();
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
   }
 
   try {
@@ -223,65 +301,102 @@ export async function fetchNewReleasesMovies(): Promise<Movie[]> {
     });
     if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
     const data = await res.json();
-    return (data.results || []).slice(0, 10).map(mapTmdbMovie);
+    return (data.results || []).map(mapTmdbMovie);
   } catch (error) {
-    console.warn('[TMDB] Failed to fetch new releases, using local fallback:', error);
-    return getNewReleasesMovies();
+    console.error('[TMDB] Failed to fetch new releases:', error);
+    return [];
   }
 }
 
 /**
- * Search movies by query
+ * Searches movies on TMDB by text query, optionally filtered by genre
  */
-export async function searchMovies(query: string): Promise<Movie[]> {
-  const trimmed = query.trim().toLowerCase();
+export async function searchMovies(query: string, genreId?: number): Promise<Movie[]> {
+  const trimmed = query.trim();
   if (!trimmed) return [];
 
   if (!isTmdbConfigured) {
-    return MOVIES.filter(
-      (m) =>
-        m.title.toLowerCase().includes(trimmed) ||
-        m.overview.toLowerCase().includes(trimmed) ||
-        m.genres.some((g) => g.toLowerCase().includes(trimmed))
-    );
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
   }
 
   try {
-    const res = await fetch(buildUrl('/search/movie', { query }), {
+    const res = await fetch(buildUrl('/search/movie', { query: trimmed }), {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
+    const data = await res.json();
+    let movies = (data.results || []).map(mapTmdbMovie);
+
+    if (genreId && genreId > 0) {
+      const genreName = TMDB_GENRES[genreId]?.toLowerCase();
+      if (genreName) {
+        movies = movies.filter((m: Movie) =>
+          m.genres.some((g: string) => g.toLowerCase() === genreName)
+        );
+      }
+    }
+
+    return movies;
+  } catch (error) {
+    console.error('[TMDB] Search error:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetches movies by genre from TMDB /discover/movie endpoint
+ */
+export async function fetchMoviesByGenre(genreId: number): Promise<Movie[]> {
+  if (!isTmdbConfigured) {
+    console.warn('[TMDB] API credentials are not configured');
+    return [];
+  }
+
+  try {
+    const params: Record<string, string | number> = {
+      sort_by: 'popularity.desc',
+    };
+    if (genreId > 0) {
+      params.with_genres = genreId;
+    }
+
+    const res = await fetch(buildUrl('/discover/movie', params), {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
     const data = await res.json();
     return (data.results || []).map(mapTmdbMovie);
   } catch (error) {
-    console.warn('[TMDB] Search error, using local fallback:', error);
-    return MOVIES.filter(
-      (m) =>
-        m.title.toLowerCase().includes(trimmed) ||
-        m.overview.toLowerCase().includes(trimmed)
-    );
+    console.error('[TMDB] Failed to discover movies by genre:', error);
+    return [];
   }
 }
 
 /**
- * Fetches movie details by ID
+ * Fetches full movie details by ID directly from TMDB
+ * Appends credits and release_dates for real cast, crew, and certification data.
  */
 export async function fetchMovieDetails(id: string): Promise<Movie | null> {
-  const localMatch = MOVIES.find((m) => m.id === id);
-
-  if (!isTmdbConfigured || isNaN(Number(id))) {
-    return localMatch || null;
+  if (!id || !isTmdbConfigured) {
+    return null;
   }
 
   try {
-    const res = await fetch(buildUrl(`/movie/${id}`, { append_to_response: 'credits' }), {
-      headers: getHeaders(),
-    });
-    if (!res.ok) throw new Error(`TMDB HTTP error ${res.status}`);
+    const res = await fetch(
+      buildUrl(`/movie/${id}`, { append_to_response: 'credits,release_dates' }),
+      {
+        headers: getHeaders(),
+      }
+    );
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`TMDB HTTP error ${res.status}`);
+    }
     const data = await res.json();
     return mapTmdbMovie(data);
   } catch (error) {
-    console.warn('[TMDB] Movie details error, using local match:', error);
-    return localMatch || null;
+    console.error('[TMDB] Movie details error:', error);
+    return null;
   }
 }

@@ -50,15 +50,17 @@ export function MovieCard({ movie, variant = 'rail', cardWidth }: MovieCardProps
 
         {/* Rating Badge */}
         <View style={styles.ratingBadge}>
-          <Text style={styles.ratingText}>★ {movie.rating.toFixed(1)}</Text>
+          <Text style={styles.ratingText}>
+            ★ {typeof movie.rating === 'number' ? movie.rating.toFixed(1) : '0.0'}
+          </Text>
         </View>
 
         {/* Format Badge if present */}
-        {movie.formatBadge && !isRail && (
+        {movie.formatBadge && !isRail ? (
           <View style={styles.formatBadge}>
             <Text style={styles.formatText}>{movie.formatBadge}</Text>
           </View>
-        )}
+        ) : null}
 
         {/* Top-Right Favorite Button */}
         <View style={styles.favoritePosition}>
@@ -72,13 +74,19 @@ export function MovieCard({ movie, variant = 'rail', cardWidth }: MovieCardProps
           {movie.title}
         </Text>
         <View style={styles.subMetaRow}>
-          <Text style={styles.yearText}>{movie.releaseYear}</Text>
-          {isRail && <Text style={styles.railRatingText}>★ {movie.rating.toFixed(1)}</Text>}
-          {!isRail && movie.genres[0] && (
+          {movie.releaseYear > 0 && (
+            <Text style={styles.yearText}>{movie.releaseYear}</Text>
+          )}
+          {isRail && (
+            <Text style={styles.railRatingText}>
+              ★ {typeof movie.rating === 'number' ? movie.rating.toFixed(1) : '0.0'}
+            </Text>
+          )}
+          {!isRail && Array.isArray(movie.genres) && movie.genres[0] ? (
             <View style={styles.genrePill}>
               <Text style={styles.genrePillText}>{movie.genres[0]}</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </Pressable>

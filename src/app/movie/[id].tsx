@@ -1,18 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getMovieById } from '../../data/movies';
+import { fetchMovieDetails } from '../../services/movie-api';
 import { useAuthStore } from '../../stores/auth-store';
 import { useFavoritesStore } from '../../stores/favorites-store';
 import { colors } from '../../theme/tokens';
+import { Movie } from '../../types';
 
 export default function MovieDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const movie = getMovieById(id || '');
+
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const user = useAuthStore((state) => state.user);
   const isFavorite = useFavoritesStore((state) =>
@@ -20,13 +32,66 @@ export default function MovieDetailScreen() {
   );
   const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
 
-  if (!movie) {
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadMovie() {
+      if (!id) {
+        setIsLoading(false);
+        setError('Missing movie identifier.');
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const data = await fetchMovieDetails(String(id));
+        if (!isCancelled) {
+          setMovie(data);
+          if (!data) {
+            setError('The requested movie entry could not be found on TMDB.');
+          }
+        }
+      } catch (err: any) {
+        if (!isCancelled) {
+          console.error('[MovieDetailScreen] Error fetching movie details:', err);
+          setError(err?.message || 'Failed to load movie from TMDB.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadMovie();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.cinemaAmber} />
+          <Text style={styles.loadingText}>Retrieving TMDB Archival Entry...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!movie || error) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Ionicons name="film-outline" size={48} color={colors.cinemaAmber} />
           <Text style={styles.errorTitle}>Movie Not Found</Text>
-          <Text style={styles.errorSub}>The requested cinema entry could not be located.</Text>
+          <Text style={styles.errorSub}>
+            {error || 'The requested cinema entry could not be located.'}
+          </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.back()}
@@ -39,9 +104,10 @@ export default function MovieDetailScreen() {
     );
   }
 
-  const hours = Math.floor(movie.durationMinutes / 60);
-  const minutes = movie.durationMinutes % 60;
-  const durationStr = `${hours}h ${minutes}m`;
+  const durationStr =
+    movie.durationMinutes > 0
+      ? `${Math.floor(movie.durationMinutes / 60)}h ${movie.durationMinutes % 60}m`
+      : 'N/A';
 
   const handleFavoritePress = () => {
     toggleFavorite(movie, user?.id);
@@ -51,7 +117,7 @@ export default function MovieDetailScreen() {
     try {
       await Share.share({
         title: movie.title,
-        message: `Check out "${movie.title}" (${movie.releaseYear}) on Austin MovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
+        message: `Check out "${movie.title}" (${movie.releaseYear || 'TMDB'}) on Austin MovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
       });
     } catch {
       // share dismissed
@@ -62,213 +128,231 @@ export default function MovieDetailScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.innerWrapper}>
         {/* Top Header Bar */}
-      <View style={styles.headerBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.primaryInk} />
-        </Pressable>
+        <View style={styles.headerBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.primaryInk} />
+          </Pressable>
 
-        <Text style={styles.headerTitleText}>Movie Details</Text>
+          <Text style={styles.headerTitleText}>Movie Details</Text>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Share movie"
-          onPress={handleShare}
-          style={({ pressed }) => [styles.shareHeaderBtn, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Ionicons name="share-outline" size={20} color={colors.primaryInk} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Backdrop Banner */}
-        <View style={styles.backdropContainer}>
-          <Image
-            source={{ uri: movie.backdropUrl }}
-            style={styles.backdropImage}
-            contentFit="cover"
-            transition={500}
-          />
-          <View style={styles.backdropScrimTop} />
-          <View style={styles.backdropScrimBottom} />
-          <View style={styles.ambientGlow} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share movie"
+            onPress={handleShare}
+            style={({ pressed }) => [styles.shareHeaderBtn, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Ionicons name="share-outline" size={20} color={colors.primaryInk} />
+          </Pressable>
         </View>
 
-        {/* Floating Movie Header Block */}
-        <View style={styles.headerBlock}>
-          {/* Tag row */}
-          <View style={styles.tagRow}>
-            <View style={styles.screeningBadge}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.screeningText}>Now Screening</Text>
-            </View>
-            <Text style={styles.tagBullet}>•</Text>
-            <Text style={styles.formatText}>{movie.formatBadge || 'Dolby Atmos'}</Text>
-          </View>
-
-          {/* Title and Tagline */}
-          <Text style={styles.movieTitle}>{movie.title}</Text>
-          {movie.tagline && <Text style={styles.taglineText}>“{movie.tagline}”</Text>}
-
-          {/* Numeric Metadata Row */}
-          <View style={styles.metadataCard}>
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={15} color={colors.cinemaAmber} />
-              <Text style={styles.ratingScore}>{movie.rating.toFixed(1)}</Text>
-              <Text style={styles.ratingMax}>/ 10</Text>
-            </View>
-
-            <Text style={styles.metaPipe}>|</Text>
-
-            <View style={styles.metaItem}>
-              <Ionicons name="calendar-outline" size={14} color={colors.mutedInk} />
-              <Text style={styles.metaItemText}>{movie.releaseDate || movie.releaseYear}</Text>
-            </View>
-
-            <Text style={styles.metaPipe}>|</Text>
-
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={14} color={colors.mutedInk} />
-              <Text style={styles.metaItemText}>{durationStr}</Text>
-            </View>
-
-            {movie.ageRating && (
-              <>
-                <Text style={styles.metaPipe}>|</Text>
-                <View style={styles.ageBadge}>
-                  <Text style={styles.ageBadgeText}>{movie.ageRating}</Text>
-                </View>
-              </>
-            )}
-          </View>
-
-          {/* Genre Badges */}
-          <View style={styles.genresRow}>
-            {movie.genres.map((g) => (
-              <View key={g} style={styles.genreBadge}>
-                <Text style={styles.genreBadgeText}>{g}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* 52px Primary Action Bar */}
-          <View style={styles.actionBar}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              onPress={handleFavoritePress}
-              style={({ pressed }) => [
-                styles.primaryFavBtn,
-                isFavorite && styles.primaryFavBtnActive,
-                { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}
-            >
-              <Ionicons
-                name={isFavorite ? 'heart' : 'heart-outline'}
-                size={22}
-                color={isFavorite ? colors.cinemaAmber : colors.cinemaCanvas}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Backdrop Banner */}
+          <View style={styles.backdropContainer}>
+            {movie.backdropUrl ? (
+              <Image
+                source={{ uri: movie.backdropUrl }}
+                style={styles.backdropImage}
+                contentFit="cover"
+                transition={500}
               />
-              <Text
-                style={[
-                  styles.primaryFavBtnText,
-                  isFavorite && styles.primaryFavBtnTextActive,
-                ]}
-              >
-                {isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Share movie"
-              onPress={handleShare}
-              style={({ pressed }) => [
-                styles.shareBtn,
-                { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
-              ]}
-            >
-              <Ionicons name="share-social-outline" size={20} color={colors.primaryInk} />
-            </Pressable>
+            ) : null}
+            <View style={styles.backdropScrimTop} />
+            <View style={styles.backdropScrimBottom} />
+            <View style={styles.ambientGlow} />
           </View>
 
-          {/* Overview Block */}
-          <View style={styles.overviewSection}>
-            <View style={styles.overviewHeader}>
-              <Text style={styles.overviewTitle}>Overview</Text>
-              <Text style={styles.archivalLogText}>ARCHIVAL LOG</Text>
+          {/* Floating Movie Header Block */}
+          <View style={styles.headerBlock}>
+            {/* Tag row */}
+            <View style={styles.tagRow}>
+              <View style={styles.screeningBadge}>
+                <View style={styles.pulseDot} />
+                <Text style={styles.screeningText}>Theatrical Catalog</Text>
+              </View>
+              {movie.formatBadge && (
+                <>
+                  <Text style={styles.tagBullet}>•</Text>
+                  <Text style={styles.formatText}>{movie.formatBadge}</Text>
+                </>
+              )}
             </View>
-            <Text style={styles.overviewBody}>{movie.overview}</Text>
-          </View>
 
-          {/* Technical Specs & Recognition Card */}
-          <View style={styles.specsCard}>
-            <View style={styles.specsGrid}>
-              <View style={styles.specItem}>
-                <Text style={styles.specLabel}>DIRECTOR</Text>
-                <Text style={styles.specValue}>{movie.director || 'Kaelen Vance'}</Text>
-                <Text style={styles.specSub}>Academy Honoree</Text>
+            {/* Title and Tagline */}
+            <Text style={styles.movieTitle}>{movie.title}</Text>
+            {movie.tagline && <Text style={styles.taglineText}>“{movie.tagline}”</Text>}
+
+            {/* Numeric Metadata Row */}
+            <View style={styles.metadataCard}>
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={15} color={colors.cinemaAmber} />
+                <Text style={styles.ratingScore}>{movie.rating.toFixed(1)}</Text>
+                <Text style={styles.ratingMax}>/ 10</Text>
               </View>
 
-              <View style={styles.specItem}>
-                <Text style={styles.specLabel}>CINEMATOGRAPHY</Text>
-                <Text style={styles.specValue}>{movie.cinematography || 'Mira Lin, ASC'}</Text>
-                <Text style={styles.specSub}>65mm Large Format</Text>
+              <Text style={styles.metaPipe}>|</Text>
+
+              <View style={styles.metaItem}>
+                <Ionicons name="calendar-outline" size={14} color={colors.mutedInk} />
+                <Text style={styles.metaItemText}>
+                  {movie.releaseDate || (movie.releaseYear > 0 ? movie.releaseYear : 'N/A')}
+                </Text>
               </View>
 
-              <View style={styles.specItem}>
-                <Text style={styles.specLabel}>PRODUCTION SOUND</Text>
-                <Text style={styles.specValue}>{movie.sound || 'Jonas Lindqvist'}</Text>
-                <Text style={styles.specSub}>Original Analog Score</Text>
+              <Text style={styles.metaPipe}>|</Text>
+
+              <View style={styles.metaItem}>
+                <Ionicons name="time-outline" size={14} color={colors.mutedInk} />
+                <Text style={styles.metaItemText}>{durationStr}</Text>
               </View>
 
-              <View style={styles.specItem}>
-                <Text style={styles.specLabel}>STUDIO</Text>
-                <Text style={styles.specValue}>{movie.studio || 'Aetherium Pictures'}</Text>
-                <Text style={styles.specSub}>Theatrical Vault</Text>
-              </View>
+              {movie.ageRating && (
+                <>
+                  <Text style={styles.metaPipe}>|</Text>
+                  <View style={styles.ageBadge}>
+                    <Text style={styles.ageBadgeText}>{movie.ageRating}</Text>
+                  </View>
+                </>
+              )}
             </View>
-          </View>
 
-          {/* Cast & Crew Shelf */}
-          {movie.cast && movie.cast.length > 0 && (
-            <View style={styles.castSection}>
-              <View style={styles.castHeader}>
-                <Text style={styles.castTitle}>Cast & Crew</Text>
-                <Text style={styles.castCreditsCount}>{movie.cast.length} CREDITS</Text>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.castScroll}
-              >
-                {movie.cast.map((actor, idx) => (
-                  <View key={idx} style={styles.castCard}>
-                    <Image
-                      source={{ uri: actor.avatarUrl }}
-                      style={styles.castAvatar}
-                      contentFit="cover"
-                    />
-                    <Text numberOfLines={1} style={styles.castName}>
-                      {actor.name}
-                    </Text>
-                    <Text numberOfLines={1} style={styles.castCharacter}>
-                      {actor.character}
-                    </Text>
+            {/* Genre Badges */}
+            {movie.genres && movie.genres.length > 0 && (
+              <View style={styles.genresRow}>
+                {movie.genres.map((g) => (
+                  <View key={g} style={styles.genreBadge}>
+                    <Text style={styles.genreBadgeText}>{g}</Text>
                   </View>
                 ))}
-              </ScrollView>
+              </View>
+            )}
+
+            {/* 52px Primary Action Bar */}
+            <View style={styles.actionBar}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                onPress={handleFavoritePress}
+                style={({ pressed }) => [
+                  styles.primaryFavBtn,
+                  isFavorite && styles.primaryFavBtnActive,
+                  { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                ]}
+              >
+                <Ionicons
+                  name={isFavorite ? 'heart' : 'heart-outline'}
+                  size={22}
+                  color={isFavorite ? colors.cinemaAmber : colors.cinemaCanvas}
+                />
+                <Text
+                  style={[
+                    styles.primaryFavBtnText,
+                    isFavorite && styles.primaryFavBtnTextActive,
+                  ]}
+                >
+                  {isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share movie"
+                onPress={handleShare}
+                style={({ pressed }) => [
+                  styles.shareBtn,
+                  { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
+                ]}
+              >
+                <Ionicons name="share-social-outline" size={20} color={colors.primaryInk} />
+              </Pressable>
             </View>
-          )}
-        </View>
-      </ScrollView>
+
+            {/* Overview Block */}
+            <View style={styles.overviewSection}>
+              <View style={styles.overviewHeader}>
+                <Text style={styles.overviewTitle}>Overview</Text>
+                <Text style={styles.archivalLogText}>TMDB SYNOPSIS</Text>
+              </View>
+              <Text style={styles.overviewBody}>
+                {movie.overview || 'No synopsis provided for this title.'}
+              </Text>
+            </View>
+
+            {/* Technical Specs & Production Card */}
+            <View style={styles.specsCard}>
+              <View style={styles.specsGrid}>
+                <View style={styles.specItem}>
+                  <Text style={styles.specLabel}>DIRECTOR</Text>
+                  <Text style={styles.specValue}>{movie.director || 'N/A'}</Text>
+                  <Text style={styles.specSub}>Direction</Text>
+                </View>
+
+                <View style={styles.specItem}>
+                  <Text style={styles.specLabel}>CINEMATOGRAPHY</Text>
+                  <Text style={styles.specValue}>{movie.cinematography || 'N/A'}</Text>
+                  <Text style={styles.specSub}>Camera & Visuals</Text>
+                </View>
+
+                <View style={styles.specItem}>
+                  <Text style={styles.specLabel}>PRODUCTION SOUND</Text>
+                  <Text style={styles.specValue}>{movie.sound || 'N/A'}</Text>
+                  <Text style={styles.specSub}>Original Score</Text>
+                </View>
+
+                <View style={styles.specItem}>
+                  <Text style={styles.specLabel}>STUDIO</Text>
+                  <Text style={styles.specValue}>{movie.studio || 'N/A'}</Text>
+                  <Text style={styles.specSub}>Production</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Cast & Crew Shelf */}
+            {movie.cast && movie.cast.length > 0 && (
+              <View style={styles.castSection}>
+                <View style={styles.castHeader}>
+                  <Text style={styles.castTitle}>Cast & Crew</Text>
+                  <Text style={styles.castCreditsCount}>{movie.cast.length} CREDITS</Text>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.castScroll}
+                >
+                  {movie.cast.map((actor, idx) => (
+                    <View key={idx} style={styles.castCard}>
+                      {actor.avatarUrl ? (
+                        <Image
+                          source={{ uri: actor.avatarUrl }}
+                          style={styles.castAvatar}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[styles.castAvatar, styles.placeholderAvatar]}>
+                          <Ionicons name="person" size={24} color={colors.mutedInk} />
+                        </View>
+                      )}
+                      <Text numberOfLines={1} style={styles.castName}>
+                        {actor.name}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.castCharacter}>
+                        {actor.character}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -284,6 +368,19 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 768,
     alignSelf: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  loadingText: {
+    color: colors.secondaryInk,
+    fontSize: 13,
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+    textTransform: 'uppercase',
   },
   headerBar: {
     flexDirection: 'row',
@@ -614,6 +711,12 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     backgroundColor: colors.quietStage,
     marginBottom: 6,
+  },
+  placeholderAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
   },
   castName: {
     color: colors.primaryInk,

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   ScrollView,
@@ -12,143 +13,202 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '../../components/empty-state';
 import { MovieCard } from '../../components/movie-card';
-import { GENRES, MOVIES } from '../../data/movies';
+import {
+  TMDB_GENRES_LIST,
+  fetchMoviesByGenre,
+  fetchPopularMovies,
+  searchMovies,
+} from '../../services/movie-api';
 import { colors } from '../../theme/tokens';
+import { Movie } from '../../types';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState<string>('All');
+  const [selectedGenreId, setSelectedGenreId] = useState<number>(0);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const filteredMovies = useMemo(() => {
-    return MOVIES.filter((movie) => {
-      const matchesGenre =
-        selectedGenre === 'All' ||
-        movie.genres.some((g) => g.toLowerCase() === selectedGenre.toLowerCase());
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-      const q = query.trim().toLowerCase();
-      const matchesQuery =
-        !q ||
-        movie.title.toLowerCase().includes(q) ||
-        movie.overview.toLowerCase().includes(q) ||
-        (movie.director && movie.director.toLowerCase().includes(q)) ||
-        movie.genres.some((g) => g.toLowerCase().includes(q));
+  const performFetch = useCallback(
+    async (searchQuery: string, genreId: number) => {
+      setIsLoading(true);
+      try {
+        const trimmed = searchQuery.trim();
+        if (trimmed) {
+          const results = await searchMovies(trimmed, genreId > 0 ? genreId : undefined);
+          setMovies(results);
+        } else if (genreId > 0) {
+          const results = await fetchMoviesByGenre(genreId);
+          setMovies(results);
+        } else {
+          const results = await fetchPopularMovies();
+          setMovies(results);
+        }
+      } catch (err) {
+        console.error('[SearchScreen] TMDB fetch error:', err);
+        setMovies([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
-      return matchesGenre && matchesQuery;
-    });
-  }, [query, selectedGenre]);
+  // Trigger search with debounce for text input
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    const trimmed = query.trim();
+    if (trimmed) {
+      debounceTimerRef.current = setTimeout(() => {
+        performFetch(trimmed, selectedGenreId);
+      }, 350);
+    } else {
+      performFetch('', selectedGenreId);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [query, selectedGenreId, performFetch]);
 
   const handleClear = () => {
     setQuery('');
+  };
+
+  const handleGenrePress = (id: number) => {
+    setSelectedGenreId(id);
   };
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.innerWrapper}>
         {/* Top Header Block */}
-      <View style={styles.headerBlock}>
-        <View style={styles.titleRow}>
-          <View>
-            <Text style={styles.headlineText}>Search</Text>
-            <Text style={styles.subheadText}>Explore the curated theatrical vault</Text>
+        <View style={styles.headerBlock}>
+          <View style={styles.titleRow}>
+            <View>
+              <Text style={styles.headlineText}>Search</Text>
+              <Text style={styles.subheadText}>Explore the live TMDB theatrical vault</Text>
+            </View>
+
+            <View style={styles.liveIndexBadge}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.liveIndexText}>TMDB Live</Text>
+            </View>
           </View>
 
-          <View style={styles.liveIndexBadge}>
-            <View style={styles.pulseDot} />
-            <Text style={styles.liveIndexText}>Live Index</Text>
-          </View>
-        </View>
-
-        {/* 52px Search Input Bar */}
-        <View style={styles.searchBarWrapper}>
-          <Ionicons name="search" size={20} color={colors.mutedInk} style={styles.searchIcon} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search by title, director, or genre..."
-            placeholderTextColor={colors.mutedInk}
-            style={styles.searchInput}
-            selectionColor={colors.cinemaAmber}
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Clear search input"
-              onPress={handleClear}
-              style={styles.clearButton}
-            >
-              <Ionicons name="close-circle" size={18} color={colors.mutedInk} />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Genre Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.genrePillsRow}
-        >
-          {GENRES.map((genre: string) => {
-            const isSelected = selectedGenre === genre;
-            return (
+          {/* 52px Search Input Bar */}
+          <View style={styles.searchBarWrapper}>
+            <Ionicons name="search" size={20} color={colors.mutedInk} style={styles.searchIcon} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search by movie title..."
+              placeholderTextColor={colors.mutedInk}
+              style={styles.searchInput}
+              selectionColor={colors.cinemaAmber}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
               <Pressable
-                key={genre}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                onPress={() => setSelectedGenre(genre)}
-                style={({ pressed }) => [
-                  styles.genrePill,
-                  isSelected ? styles.genrePillActive : styles.genrePillInactive,
-                  { opacity: pressed ? 0.8 : 1 },
-                ]}
+                accessibilityLabel="Clear search input"
+                onPress={handleClear}
+                style={styles.clearButton}
               >
-                <Text
-                  style={[
-                    styles.genrePillText,
-                    isSelected ? styles.genrePillTextActive : styles.genrePillTextInactive,
+                <Ionicons name="close-circle" size={18} color={colors.mutedInk} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Genre Filter Pills from TMDB */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.genrePillsRow}
+          >
+            {TMDB_GENRES_LIST.map((item) => {
+              const isSelected = selectedGenreId === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => handleGenrePress(item.id)}
+                  style={({ pressed }) => [
+                    styles.genrePill,
+                    isSelected ? styles.genrePillActive : styles.genrePillInactive,
+                    { opacity: pressed ? 0.8 : 1 },
                   ]}
                 >
-                  {genre}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.genrePillText,
+                      isSelected ? styles.genrePillTextActive : styles.genrePillTextInactive,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
 
-        {/* Results Metadata Bar */}
-        <View style={styles.resultsMetaBar}>
-          <Text style={styles.resultsCountText}>
-            {filteredMovies.length} {filteredMovies.length === 1 ? 'title' : 'titles'} found
-          </Text>
-          <View style={styles.sortIndicator}>
-            <Ionicons name="options-outline" size={14} color={colors.mutedInk} />
-            <Text style={styles.sortText}>Relevance</Text>
+          {/* Results Metadata Bar */}
+          <View style={styles.resultsMetaBar}>
+            <Text style={styles.resultsCountText}>
+              {isLoading
+                ? 'Searching TMDB...'
+                : `${movies.length} ${movies.length === 1 ? 'title' : 'titles'} found`}
+            </Text>
+            <View style={styles.sortIndicator}>
+              {isLoading ? (
+                <ActivityIndicator size="small" color={colors.cinemaAmber} />
+              ) : (
+                <>
+                  <Ionicons name="options-outline" size={14} color={colors.mutedInk} />
+                  <Text style={styles.sortText}>Live TMDB</Text>
+                </>
+              )}
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* 2-Column Movie Grid or Empty State */}
-      <FlatList
-        data={filteredMovies}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <MovieCard movie={item} variant="grid" />}
-        ListEmptyComponent={
-          <EmptyState
-            iconName="search-outline"
-            title="No Titles Found"
-            description="We couldn’t find any films matching your search terms. Try adjusting your query or genre filter."
-            actionLabel="Clear Filters"
-            onActionPress={() => {
-              setQuery('');
-              setSelectedGenre('All');
-            }}
+        {/* 2-Column Movie Grid or Empty State */}
+        {isLoading && movies.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.cinemaAmber} />
+            <Text style={styles.loadingText}>Searching Theatrical Vault...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={movies}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.columnWrapper}
+            contentContainerStyle={styles.gridContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => <MovieCard movie={item} variant="grid" />}
+            ListEmptyComponent={
+              <EmptyState
+                iconName="search-outline"
+                title="No Titles Found"
+                description="We couldn’t find any films matching your search terms from TMDB. Try adjusting your query or genre filter."
+                actionLabel="Clear Filters"
+                onActionPress={() => {
+                  setQuery('');
+                  setSelectedGenreId(0);
+                }}
+              />
+            }
           />
-        }
-      />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -290,5 +350,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  loadingText: {
+    color: colors.secondaryInk,
+    fontSize: 13,
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+    textTransform: 'uppercase',
   },
 });
