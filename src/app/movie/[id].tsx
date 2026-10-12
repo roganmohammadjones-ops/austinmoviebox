@@ -12,7 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchMovieDetails, openMovieTrailer } from '../../services/movie-api';
+import { TheatricalVideoPlayer } from '../../components/theatrical-video-player';
+import { fetchMovieDetails } from '../../services/movie-api';
 import { useAuthStore } from '../../stores/auth-store';
 import { useFavoritesStore } from '../../stores/favorites-store';
 import { colors } from '../../theme/tokens';
@@ -24,6 +25,7 @@ export default function MovieDetailScreen() {
 
   const [movie, setMovie] = useState<Movie | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isPlayingTrailer, setIsPlayingTrailer] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const user = useAuthStore((state) => state.user);
@@ -114,9 +116,7 @@ export default function MovieDetailScreen() {
   };
 
   const handlePlayTrailer = () => {
-    if (movie) {
-      openMovieTrailer(movie);
-    }
+    setIsPlayingTrailer(true);
   };
 
   const handleShare = async () => {
@@ -392,6 +392,13 @@ export default function MovieDetailScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* In-App Theatrical Video Player Modal */}
+      <TheatricalVideoPlayer
+        movie={movie}
+        visible={isPlayingTrailer}
+        onClose={() => setIsPlayingTrailer(false)}
+      />
     </SafeAreaView>
   );
 }
