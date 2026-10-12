@@ -464,3 +464,35 @@ export async function openMovieTrailer(movie: Movie): Promise<void> {
   }
 }
 
+/**
+ * Fetches the official YouTube trailer video key for a given movie directly from TMDB
+ */
+export async function fetchMovieTrailerKey(movieId: string): Promise<string | null> {
+  if (!movieId || !isTmdbConfigured) return null;
+
+  try {
+    const res = await fetch(buildUrl(`/movie/${movieId}/videos`), {
+      headers: getHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.results || !Array.isArray(data.results)) return null;
+
+    const youtubeVideos = data.results.filter(
+      (v: any) => v.site === 'YouTube' && v.key
+    );
+
+    const officialTrailer =
+      youtubeVideos.find((v: any) => v.type === 'Trailer' && v.official) ||
+      youtubeVideos.find((v: any) => v.type === 'Trailer') ||
+      youtubeVideos.find((v: any) => v.type === 'Teaser') ||
+      youtubeVideos[0];
+
+    return officialTrailer?.key || null;
+  } catch (err) {
+    console.error('[TMDB] Error fetching trailer key:', err);
+    return null;
+  }
+}
+
+
