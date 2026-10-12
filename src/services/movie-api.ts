@@ -6,7 +6,7 @@
  */
 
 import * as WebBrowser from 'expo-web-browser';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { Movie } from '../types';
 
 // TMDB Configuration from environment variables
@@ -441,15 +441,52 @@ export async function fetchMovieDetails(id: string): Promise<Movie | null> {
 export async function openMovieTrailer(movie: Movie): Promise<void> {
   if (!movie) return;
 
-  const url =
-    movie.trailerUrl ||
-    (movie.youtubeKey ? `https://www.youtube.com/watch?v=${movie.youtubeKey}` : null) ||
-    `https://www.youtube.com/results?search_query=${encodeURIComponent(
-      `${movie.title} ${movie.releaseYear || ''} official trailer`
-    )}`;
+  let key = movie.youtubeKey;
+  if (!key && movie.id) {
+    key = (await fetchMovieTrailerKey(movie.id)) || undefined;
+  }
 
+  const directVideoUrl = key ? `https://www.youtube.com/watch?v=${key}` : null;
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+    `${movie.title} ${movie.releaseYear || ''} official trailer`
+  )}`;
+  const targetUrl = directVideoUrl || movie.trailerUrl || searchUrl;
+
+  // On Web, use window.open or Linking to avoid popup blocker issues
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof window !== 'undefined') {
+        const win = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        if (win) return;
+      }
+    } catch (e) {
+      console.warn('[Trailer] Web window.open failed:', e);
+    }
+    try {
+      await Linking.openURL(targetUrl);
+      return;
+    } catch (linkErr) {
+      console.warn('[Trailer] Web Linking.openURL failed:', linkErr);
+    }
+  }
+
+  // On native platforms, prefer opening the YouTube app if key is present
+  if (key && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+    const youtubeAppUrl = `vnd.youtube:${key}`;
+    try {
+      const canOpen = await Linking.canOpenURL(youtubeAppUrl);
+      if (canOpen) {
+        await Linking.openURL(youtubeAppUrl);
+        return;
+      }
+    } catch {
+      // YouTube app not installed or schema not permitted, fall through
+    }
+  }
+
+  // Fallback to in-app browser or standard linking
   try {
-    await WebBrowser.openBrowserAsync(url, {
+    await WebBrowser.openBrowserAsync(targetUrl, {
       presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
       toolbarColor: '#111214',
       controlsColor: '#D7A35B',
@@ -457,7 +494,7 @@ export async function openMovieTrailer(movie: Movie): Promise<void> {
   } catch (err) {
     console.warn('[Trailer] Failed to open in WebBrowser, trying Linking:', err);
     try {
-      await Linking.openURL(url);
+      await Linking.openURL(targetUrl);
     } catch (linkErr) {
       console.error('[Trailer] Could not open URL via Linking:', linkErr);
     }

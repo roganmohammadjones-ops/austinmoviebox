@@ -458,9 +458,11 @@ const styles = StyleSheet.create({
   },
   backdropContainer: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: 260,
     position: 'relative',
     backgroundColor: colors.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backdropImage: {
     width: '100%',
@@ -493,7 +495,7 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     paddingHorizontal: 20,
-    marginTop: -20,
+    paddingTop: 16,
     zIndex: 10,
   },
   tagRow: {
@@ -622,9 +624,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   backdropPlayBtn: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '32%',
     alignItems: 'center',
     gap: 8,
     zIndex: 10,

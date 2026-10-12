@@ -11,8 +11,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState } from '../../components/empty-state';
 import { MovieCard } from '../../components/movie-card';
+import { SearchEmptyVault } from '../../components/search-empty-vault';
 import {
   TMDB_GENRES_LIST,
   fetchMoviesByGenre,
@@ -78,6 +78,16 @@ export default function SearchScreen() {
 
   const handleClear = () => {
     setQuery('');
+  };
+
+  const handleClearAll = () => {
+    setQuery('');
+    setSelectedGenreId(0);
+  };
+
+  const handleSelectShelf = (shelfQuery: string) => {
+    setSelectedGenreId(0);
+    setQuery(shelfQuery);
   };
 
   const handleGenrePress = (id: number) => {
@@ -195,15 +205,10 @@ export default function SearchScreen() {
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => <MovieCard movie={item} variant="grid" />}
             ListEmptyComponent={
-              <EmptyState
-                iconName="search-outline"
-                title="No Titles Found"
-                description="We couldn’t find any films matching your search terms from TMDB. Try adjusting your query or genre filter."
-                actionLabel="Clear Filters"
-                onActionPress={() => {
-                  setQuery('');
-                  setSelectedGenreId(0);
-                }}
+              <SearchEmptyVault
+                query={query}
+                onClearFilters={handleClearAll}
+                onSelectShelf={handleSelectShelf}
               />
             }
           />

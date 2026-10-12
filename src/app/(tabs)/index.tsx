@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,9 +11,11 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { HomeSkeleton } from '../../components/home-skeleton';
 import { MovieHero } from '../../components/movie-hero';
 import { MovieRail } from '../../components/movie-rail';
 import {
+  fetchMovieDetails,
   fetchNewReleasesMovies,
   fetchPopularMovies,
   fetchTopRatedMovies,
@@ -132,6 +133,28 @@ export default function HomeScreen() {
     return trendingMovies[0] || popularMovies[0] || null;
   }, [trendingMovies, popularMovies]);
 
+  const [enrichedSpotlight, setEnrichedSpotlight] = useState<Movie | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (spotlightMovie?.id) {
+      fetchMovieDetails(spotlightMovie.id).then((full) => {
+        if (isMounted && full) {
+          setEnrichedSpotlight(full);
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [spotlightMovie?.id]);
+
+  const activeSpotlight =
+    enrichedSpotlight && enrichedSpotlight.id === spotlightMovie?.id
+      ? enrichedSpotlight
+      : spotlightMovie;
+
   const handleProfilePress = () => {
     if (isGuest) {
       router.push('/auth' as any);
@@ -208,10 +231,9 @@ export default function HomeScreen() {
         </View>
 
         {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.cinemaAmber} />
-            <Text style={styles.loadingText}>Accessing Theatrical Vault...</Text>
-          </View>
+          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <HomeSkeleton />
+          </ScrollView>
         ) : error && !spotlightMovie ? (
           <View style={styles.errorContainer}>
             <Ionicons name="cloud-offline-outline" size={44} color={colors.cinemaAmber} />
@@ -243,7 +265,7 @@ export default function HomeScreen() {
             ]}
           >
             {/* Featured Hero Billboard */}
-            {spotlightMovie ? (
+            {activeSpotlight ? (
               <View
                 style={[
                   styles.heroPadding,
@@ -253,7 +275,7 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                <MovieHero movie={spotlightMovie} />
+                <MovieHero movie={activeSpotlight} />
               </View>
             ) : null}
 

@@ -55,3 +55,33 @@ test('TMDB Query Builder - URL & Parameter Construction', () => {
     'https://api.themoviedb.org/3/search/movie?query=Oppenheimer&page=1'
   );
 });
+
+test('TMDB Video Trailer Resolver - Priority Selection', () => {
+  function selectTrailerKey(results: Array<{ site: string; key: string; type: string; official?: boolean }>): string | null {
+    const youtubeVideos = results.filter((v) => v.site === 'YouTube' && v.key);
+    const officialTrailer =
+      youtubeVideos.find((v) => v.type === 'Trailer' && v.official) ||
+      youtubeVideos.find((v) => v.type === 'Trailer') ||
+      youtubeVideos.find((v) => v.type === 'Teaser' && v.official) ||
+      youtubeVideos.find((v) => v.type === 'Teaser') ||
+      youtubeVideos[0];
+    return officialTrailer?.key || null;
+  }
+
+  const mockVideos = [
+    { site: 'Vimeo', key: 'vimeo123', type: 'Trailer', official: true },
+    { site: 'YouTube', key: 'teaser1', type: 'Teaser', official: false },
+    { site: 'YouTube', key: 'official_trailer_key', type: 'Trailer', official: true },
+    { site: 'YouTube', key: 'trailer2', type: 'Trailer', official: false },
+  ];
+
+  assert.equal(selectTrailerKey(mockVideos), 'official_trailer_key');
+
+  const fallbackTeaser = [
+    { site: 'YouTube', key: 'teaser_only', type: 'Teaser', official: true },
+  ];
+  assert.equal(selectTrailerKey(fallbackTeaser), 'teaser_only');
+
+  assert.equal(selectTrailerKey([]), null);
+});
+

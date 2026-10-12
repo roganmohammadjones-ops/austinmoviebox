@@ -30,22 +30,12 @@ export function MovieHero({ movie }: MovieHeroProps) {
 
   // Responsive hero height following Stitch's widescreen theatrical billboard
   const heroHeight = useMemo(() => {
-    const horizontalMargin = isDesktop ? 64 : isTablet ? 48 : isSmallDevice ? 32 : 40;
-    const contentWidth = Math.min(windowWidth - horizontalMargin, 1200);
-
-    if (isDesktop) {
-      return 360;
-    }
-    if (isTablet) {
-      return 300;
-    }
-    if (isLandscape) {
-      return Math.min(Math.round(windowHeight * 0.7), 240);
-    }
-    // Mobile: 16:9 widescreen billboard with comfortable height (250px - 280px)
-    const aspect169Height = Math.round(contentWidth * (9 / 16));
-    return Math.min(Math.max(aspect169Height, 250), 280);
-  }, [isDesktop, isTablet, isLandscape, isSmallDevice, windowWidth, windowHeight]);
+    if (isDesktop) return 440;
+    if (isTablet) return 400;
+    if (isLandscape) return 320;
+    // Mobile: generous widescreen theatrical billboard
+    return isSmallDevice ? 360 : 380;
+  }, [isDesktop, isTablet, isLandscape, isSmallDevice]);
 
   if (!movie) {
     return null;
@@ -87,106 +77,119 @@ export function MovieHero({ movie }: MovieHeroProps) {
         {/* Ambient Theatrical Gradient Scrim */}
         <View style={styles.gradientScrim} />
 
-        {/* Top-Left Live Soundstage Indicator Badge (Stitch §2) */}
-        <View style={styles.spotlightBadge}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.spotlightText}>Spotlight Selection</Text>
-        </View>
+        {/* Structured Flex Tier: Top Bar, Center Play Zone, Bottom Content Shelf */}
+        <View style={styles.billboardContent}>
+          {/* Top Bar: Spotlight Selection & Live TMDB Indicator */}
+          <View style={styles.topBar}>
+            <View style={styles.spotlightBadge}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.spotlightText}>Spotlight Selection</Text>
+            </View>
 
-        {/* Centered Theatrical Video Play Button on Backdrop */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Play official trailer for ${movie.title}`}
-          onPress={handlePlayTrailer}
-          style={({ pressed }) => [
-            styles.centerPlayButton,
-            { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
-          ]}
-        >
-          <View style={styles.centerPlayCircle}>
-            <Ionicons name="play" size={26} color={colors.cinemaCanvas} style={{ marginLeft: 3 }} />
-          </View>
-          <View style={styles.playBadge}>
-            <Ionicons name="videocam-outline" size={11} color={colors.cinemaAmber} />
-            <Text style={styles.playBadgeText}>PLAY TRAILER</Text>
-          </View>
-        </Pressable>
-
-        {/* Content Over Scrim */}
-        <View style={styles.contentOverlay}>
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.heroTitle,
-              isDesktop && { fontSize: 24 },
-              isSmallDevice && { fontSize: 18 },
-            ]}
-          >
-            {movie.title}
-          </Text>
-
-          {/* Metadata Row */}
-          <View style={styles.metaRow}>
-            <Text style={styles.ratingText}>★ {ratingStr}</Text>
-            {movie.releaseYear ? (
-              <>
-                <Text style={styles.metaDivider}>•</Text>
-                <Text style={styles.metaText}>{movie.releaseYear}</Text>
-              </>
-            ) : null}
-            {genresStr ? (
-              <>
-                <Text style={styles.metaDivider}>•</Text>
-                <View style={styles.genreBadge}>
-                  <Text style={styles.genreBadgeText}>{genresStr}</Text>
-                </View>
-              </>
-            ) : null}
-            {durationStr ? (
-              <>
-                <Text style={styles.metaDivider}>•</Text>
-                <Text style={styles.metaText}>{durationStr}</Text>
-              </>
-            ) : null}
+            <View style={styles.liveApiBadge}>
+              <Ionicons name="film-outline" size={11} color={colors.cinemaAmber} />
+              <Text style={styles.liveApiBadgeText}>TMDB Live</Text>
+            </View>
           </View>
 
-          {/* Action Row: Watch Trailer CTA + Details + Favorite Toggle */}
-          <View style={[styles.actionsRow, (isDesktop || isTablet) && styles.actionsRowWide]}>
+          {/* Dedicated Play Zone (Centered with ample breathing room, text cannot cover) */}
+          <View style={styles.playZone}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Watch trailer for ${movie.title}`}
+              accessibilityLabel={`Play official trailer for ${movie.title}`}
               onPress={handlePlayTrailer}
+              hitSlop={14}
               style={({ pressed }) => [
-                styles.ctaButton,
-                isSmallDevice && { height: 42 },
-                (isDesktop || isTablet) && styles.ctaButtonWide,
-                { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                styles.centerPlayButton,
+                { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
               ]}
             >
-              <Ionicons name="play" size={isSmallDevice ? 16 : 18} color={colors.cinemaCanvas} />
-              <Text style={styles.ctaButtonText}>Watch Trailer</Text>
+              <View style={styles.centerPlayCircle}>
+                <Ionicons name="play" size={30} color={colors.cinemaCanvas} style={{ marginLeft: 3 }} />
+              </View>
+              <View style={styles.playBadge}>
+                <Ionicons name="videocam-outline" size={11} color={colors.cinemaAmber} />
+                <Text style={styles.playBadgeText}>PLAY TRAILER</Text>
+              </View>
             </Pressable>
+          </View>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View details for ${movie.title}`}
-              onPress={handleDetailsPress}
-              style={({ pressed }) => [
-                styles.secondaryDetailsBtn,
-                isSmallDevice && { height: 42 },
-                { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+          {/* Bottom Content Shelf */}
+          <View style={styles.contentOverlay}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.heroTitle,
+                isDesktop && { fontSize: 24 },
+                isSmallDevice && { fontSize: 18 },
               ]}
             >
-              <Ionicons name="information-circle-outline" size={17} color={colors.primaryInk} />
-              <Text style={styles.secondaryDetailsText}>Details</Text>
-            </Pressable>
+              {movie.title}
+            </Text>
 
-            <FavoriteButton
-              movie={movie}
-              size={isSmallDevice ? 42 : 44}
-              iconSize={isSmallDevice ? 18 : 20}
-              variant="solid"
-            />
+            {/* Metadata Row */}
+            <View style={styles.metaRow}>
+              <Text style={styles.ratingText}>★ {ratingStr}</Text>
+              {movie.releaseYear ? (
+                <>
+                  <Text style={styles.metaDivider}>•</Text>
+                  <Text style={styles.metaText}>{movie.releaseYear}</Text>
+                </>
+              ) : null}
+              {genresStr ? (
+                <>
+                  <Text style={styles.metaDivider}>•</Text>
+                  <View style={styles.genreBadge}>
+                    <Text style={styles.genreBadgeText}>{genresStr}</Text>
+                  </View>
+                </>
+              ) : null}
+              {durationStr ? (
+                <>
+                  <Text style={styles.metaDivider}>•</Text>
+                  <Text style={styles.metaText}>{durationStr}</Text>
+                </>
+              ) : null}
+            </View>
+
+            {/* Action Row: Watch Trailer CTA + Details + Favorite Toggle */}
+            <View style={[styles.actionsRow, (isDesktop || isTablet) && styles.actionsRowWide]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Watch trailer for ${movie.title}`}
+                onPress={handlePlayTrailer}
+                style={({ pressed }) => [
+                  styles.ctaButton,
+                  isSmallDevice && { height: 42 },
+                  (isDesktop || isTablet) && styles.ctaButtonWide,
+                  { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                ]}
+              >
+                <Ionicons name="play" size={isSmallDevice ? 16 : 18} color={colors.cinemaCanvas} />
+                <Text style={styles.ctaButtonText}>Watch Trailer</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View details for ${movie.title}`}
+                onPress={handleDetailsPress}
+                style={({ pressed }) => [
+                  styles.secondaryDetailsBtn,
+                  isSmallDevice && { height: 42 },
+                  { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+                ]}
+              >
+                <Ionicons name="information-circle-outline" size={17} color={colors.primaryInk} />
+                <Text style={styles.secondaryDetailsText}>Details</Text>
+              </Pressable>
+
+              <FavoriteButton
+                movie={movie}
+                size={isSmallDevice ? 42 : 44}
+                iconSize={isSmallDevice ? 18 : 20}
+                variant="solid"
+              />
+            </View>
           </View>
         </View>
       </View>
@@ -222,22 +225,32 @@ const styles = StyleSheet.create({
   },
   gradientScrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(17, 18, 20, 0.4)',
+    backgroundColor: 'rgba(14, 15, 18, 0.45)',
+  },
+  billboardContent: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  topBar: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 12,
   },
   spotlightBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(37, 40, 44, 0.9)',
+    backgroundColor: 'rgba(37, 40, 44, 0.92)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 9999,
     borderWidth: 1,
     borderColor: 'rgba(53, 56, 60, 0.5)',
-    zIndex: 2,
   },
   pulseDot: {
     width: 6,
@@ -253,36 +266,57 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontFamily: 'Courier',
   },
-  centerPlayButton: {
-    position: 'absolute',
-    top: '24%',
-    alignSelf: 'center',
+  liveApiBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    zIndex: 5,
+    gap: 4,
+    backgroundColor: 'rgba(23, 24, 28, 0.88)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 163, 91, 0.3)',
+  },
+  liveApiBadgeText: {
+    color: colors.cinemaAmber,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    fontFamily: 'Courier',
+  },
+  playZone: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    zIndex: 11,
+  },
+  centerPlayButton: {
+    alignItems: 'center',
+    gap: 8,
   },
   centerPlayCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.cinemaAmber,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.cinemaAmber,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 8,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   playBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(17, 18, 20, 0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 5,
+    backgroundColor: 'rgba(17, 18, 20, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 9999,
     borderWidth: 1,
     borderColor: 'rgba(53, 56, 60, 0.6)',
@@ -291,18 +325,16 @@ const styles = StyleSheet.create({
     color: colors.cinemaAmber,
     fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     fontFamily: 'Courier',
   },
   contentOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 12,
-    backgroundColor: 'rgba(17, 18, 20, 0.9)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(14, 15, 17, 0.94)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(53, 56, 60, 0.3)',
+    borderTopColor: 'rgba(53, 56, 60, 0.35)',
+    zIndex: 12,
   },
   heroTitle: {
     color: colors.primaryInk,

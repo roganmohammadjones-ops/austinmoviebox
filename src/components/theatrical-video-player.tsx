@@ -11,9 +11,9 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
-import { fetchMovieTrailerKey } from '../services/movie-api';
+import { fetchMovieTrailerKey, openMovieTrailer } from '../services/movie-api';
 import { colors } from '../theme/tokens';
 import { Movie } from '../types';
 import { FavoriteButton } from './favorite-button';
@@ -158,21 +158,37 @@ export function TheatricalVideoPlayer({
               allowFullScreen
             />
           ) : (
-            <WebView
-              source={{ uri: embedUrl }}
-              style={styles.webView}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              allowsFullscreenVideo
-              javaScriptEnabled
-              domStorageEnabled
-              startInLoadingState
-              renderLoading={() => (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={colors.cinemaAmber} />
+            <View style={styles.nativeStage}>
+              {movie.backdropUrl ? (
+                <Image
+                  source={{ uri: movie.backdropUrl }}
+                  style={styles.nativeBackdrop}
+                  contentFit="cover"
+                  transition={300}
+                />
+              ) : null}
+              <View style={styles.nativeScrim} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Play official trailer in full screen"
+                onPress={() => {
+                  const targetMovie = trailerKey ? { ...movie, youtubeKey: trailerKey } : movie;
+                  openMovieTrailer(targetMovie);
+                }}
+                style={({ pressed }) => [
+                  styles.nativePlayCta,
+                  { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] },
+                ]}
+              >
+                <View style={styles.nativePlayCircle}>
+                  <Ionicons name="play" size={32} color={colors.cinemaCanvas} style={{ marginLeft: 3 }} />
                 </View>
-              )}
-            />
+                <View style={styles.nativePlayBadge}>
+                  <Ionicons name="logo-youtube" size={14} color="#FF0000" />
+                  <Text style={styles.nativePlayText}>LAUNCH TRAILER IN FULLSCREEN</Text>
+                </View>
+              </Pressable>
+            </View>
           )}
         </View>
 
@@ -209,6 +225,18 @@ export function TheatricalVideoPlayer({
             </View>
 
             <View style={styles.actionRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open trailer directly on YouTube"
+                onPress={() => {
+                  const targetMovie = trailerKey ? { ...movie, youtubeKey: trailerKey } : movie;
+                  openMovieTrailer(targetMovie);
+                }}
+                style={({ pressed }) => [styles.youtubeBtn, { opacity: pressed ? 0.75 : 1 }]}
+              >
+                <Ionicons name="logo-youtube" size={19} color="#FF0000" />
+              </Pressable>
+
               <FavoriteButton movie={movie} size={44} iconSize={20} variant="solid" />
 
               <Pressable
@@ -321,9 +349,56 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(53, 56, 60, 0.4)',
   },
-  webView: {
-    flex: 1,
+  nativeStage: {
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nativeBackdrop: {
+    ...StyleSheet.absoluteFill,
+    width: '100%',
+    height: '100%',
+  },
+  nativeScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(10, 10, 12, 0.65)',
+  },
+  nativePlayCta: {
+    alignItems: 'center',
+    gap: 12,
+    zIndex: 10,
+  },
+  nativePlayCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.cinemaAmber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.cinemaAmber,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  nativePlayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(17, 18, 20, 0.92)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.7)',
+  },
+  nativePlayText: {
+    color: colors.primaryInk,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
   },
   loadingContainer: {
     ...StyleSheet.absoluteFill,
@@ -397,6 +472,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  youtubeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.quietStage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
   },
   shareBtn: {
     width: 44,
