@@ -22,24 +22,51 @@ export default function AuthModalScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const {
     signIn,
     signUp,
     signInWithGoogle,
-    signInWithYouTube,
     continueAsGuest,
     isLoading,
-    error,
+    error: storeError,
     clearError,
   } = useAuthStore();
   const syncWithCloud = useFavoritesStore((state) => state.syncWithCloud);
 
+  const displayError = localError || storeError;
+
+  const calculateStrength = (pass: string) => {
+    let score = 0;
+    if (pass.length >= 6) score++;
+    if (pass.length >= 8) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+    return score;
+  };
+
+  const strengthScore = calculateStrength(password);
+
   const handleSubmit = async () => {
-    if (!email || !password) return;
+    setLocalError(null);
+    if (!email.trim() || !password) {
+      setLocalError('Please provide both an email address and archive passcode.');
+      return;
+    }
 
     if (isSignUp) {
+      if (password.length < 6) {
+        setLocalError('Archive passcode must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setLocalError('Archive passcodes do not match.');
+        return;
+      }
+
       const res = await signUp(email.trim(), password);
       if (res.success) {
         const user = useAuthStore.getState().user;
@@ -60,20 +87,9 @@ export default function AuthModalScreen() {
     }
   };
 
-  const handleYouTubeSignIn = async () => {
-    if (error) clearError();
-    const res = await signInWithYouTube(email ? email.trim() : undefined);
-    if (res.success) {
-      const user = useAuthStore.getState().user;
-      if (user) {
-        await syncWithCloud(user.id);
-      }
-      router.back();
-    }
-  };
-
   const handleGoogleSignIn = async () => {
-    if (error) clearError();
+    setLocalError(null);
+    if (storeError) clearError();
     const res = await signInWithGoogle(email ? email.trim() : undefined);
     if (res.success) {
       const user = useAuthStore.getState().user;
@@ -99,8 +115,9 @@ export default function AuthModalScreen() {
         <View style={styles.topCloseBar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close auth modal"
+            accessibilityLabel="Close modal"
             onPress={() => router.back()}
+            hitSlop={12}
             style={styles.closeBtn}
           >
             <Ionicons name="close" size={24} color={colors.primaryInk} />
@@ -111,119 +128,44 @@ export default function AuthModalScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Main Card */}
+          {/* Main Editorial Form Card */}
           <View style={styles.formCard}>
-            {/* Ambient Background Glow */}
+            {/* Ambient Cinema Amber Glow */}
             <View style={styles.ambientGlow} />
 
             {/* Editorial Brand Mark */}
             <View style={styles.brandMarkRow}>
               <View style={styles.brandMark}>
                 <View style={styles.brandDot} />
-                <Text style={styles.brandCine}>AUSTIN</Text>
-                <Text style={styles.brandArchive}>MOVIEBOX</Text>
+                <Text style={styles.brandCine}>CINÉ</Text>
+                <Text style={styles.brandArchive}>ARCHIVE</Text>
               </View>
 
               <View style={styles.memberPassBadge}>
                 <Ionicons name="ticket-outline" size={13} color={colors.cinemaAmber} />
-                <Text style={styles.memberPassText}>THEATRICAL PASS</Text>
+                <Text style={styles.memberPassText}>MEMBER PASS</Text>
               </View>
             </View>
 
             {/* Header & Supportive Copy */}
             <View style={styles.headerBlock}>
               <Text style={styles.headerTitle}>
-                {isSignUp ? 'Create Member Vault' : 'Theatrical Access'}
+                {isSignUp ? 'Create Member Vault' : 'Welcome back'}
               </Text>
               <Text style={styles.headerSubtitle}>
                 {isSignUp
-                  ? 'Register to unlock unrestricted official film trailers and synchronize your curated collection.'
-                  : 'Sign in to access HD theatrical trailers and synchronize your saved watchlist.'}
+                  ? 'Register to unlock your personal film vault and synchronize your curated collection.'
+                  : 'Sign in to access your synchronized film collection across all your devices.'}
               </Text>
             </View>
 
-            {/* Theatrical Video Requirement Banner */}
-            <View style={styles.requirementBanner}>
-              <View style={styles.requirementHeader}>
-                <View style={styles.youtubeIconBadge}>
-                  <Ionicons name="logo-youtube" size={16} color="#FFFFFF" />
-                </View>
-                <Text style={styles.requirementTitle}>VIDEO WATCH REQUIREMENT</Text>
-              </View>
-              <Text style={styles.requirementText}>
-                Official movie trailers and age-restricted theatrical previews require an active{' '}
-                <Text style={styles.highlightText}>YouTube</Text> or{' '}
-                <Text style={styles.highlightText}>Google / Gmail</Text> account. Connect below for uninterrupted streaming.
-              </Text>
-            </View>
-
-            {/* Dedicated YouTube & Google Streaming Login Buttons */}
-            <View style={styles.socialButtonsGroup}>
-              {/* YouTube Sign In Button */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with YouTube"
-                disabled={isLoading}
-                onPress={handleYouTubeSignIn}
-                style={({ pressed }) => [
-                  styles.youtubeButton,
-                  { opacity: pressed || isLoading ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
-                ]}
-              >
-                <View style={styles.socialButtonLeft}>
-                  <View style={styles.youtubeRedCircle}>
-                    <Ionicons name="logo-youtube" size={18} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.socialTextGroup}>
-                    <Text style={styles.youtubeButtonText}>Continue with YouTube</Text>
-                    <Text style={styles.socialSubtext}>Unlocks all theatrical trailer streams</Text>
-                  </View>
-                </View>
-                <View style={styles.socialRightBadge}>
-                  <Text style={styles.socialRightBadgeText}>STREAM READY</Text>
-                </View>
-              </Pressable>
-
-              {/* Google / Gmail Sign In Button */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Continue with Google or Gmail"
-                disabled={isLoading}
-                onPress={handleGoogleSignIn}
-                style={({ pressed }) => [
-                  styles.googleButton,
-                  { opacity: pressed || isLoading ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
-                ]}
-              >
-                <View style={styles.socialButtonLeft}>
-                  <View style={styles.googleCircle}>
-                    <Ionicons name="logo-google" size={17} color={colors.cinemaAmber} />
-                  </View>
-                  <View style={styles.socialTextGroup}>
-                    <Text style={styles.googleButtonText}>Continue with Google / Gmail</Text>
-                    <Text style={styles.socialSubtext}>Connect via your Google account</Text>
-                  </View>
-                </View>
-                <View style={styles.googleRightBadge}>
-                  <Text style={styles.googleRightBadgeText}>VERIFIED GMAIL</Text>
-                </View>
-              </Pressable>
-            </View>
-
-            {/* Visual Divider to Passcode Form */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR WITH ARCHIVE PASSCODE</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Form Inputs (Alternative Email / Passcode Login) */}
+            {/* Form Inputs */}
             <View style={styles.formInputs}>
-              {/* Email */}
+              {/* Email Address */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.inputLabel}>Email Address</Text>
-                  <Text style={styles.requiredText}>OPTIONAL FOR YOUTUBE</Text>
+                  <Text style={styles.requiredText}>REQUIRED</Text>
                 </View>
                 <View style={styles.inputWrapper}>
                   <Ionicons name="mail-outline" size={18} color={colors.mutedInk} style={styles.inputIcon} />
@@ -231,9 +173,10 @@ export default function AuthModalScreen() {
                     value={email}
                     onChangeText={(val) => {
                       setEmail(val);
-                      if (error) clearError();
+                      if (localError) setLocalError(null);
+                      if (storeError) clearError();
                     }}
-                    placeholder="curator@gmail.com"
+                    placeholder="curator@cine.gallery"
                     placeholderTextColor={colors.mutedInk}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -244,13 +187,15 @@ export default function AuthModalScreen() {
                 </View>
               </View>
 
-              {/* Password */}
+              {/* Archive Passcode / Password */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.inputLabel}>Archive Passcode</Text>
-                  <Text style={styles.requiredText}>
-                    {isSignUp ? 'MIN 6 CHARS' : 'PASSCODE'}
-                  </Text>
+                  {isSignUp ? (
+                    <Text style={styles.requiredText}>MIN 6 CHARACTERS</Text>
+                  ) : (
+                    <Text style={styles.forgotLink}>REQUIRED</Text>
+                  )}
                 </View>
                 <View style={styles.inputWrapper}>
                   <Ionicons name="lock-closed-outline" size={18} color={colors.mutedInk} style={styles.inputIcon} />
@@ -258,7 +203,8 @@ export default function AuthModalScreen() {
                     value={password}
                     onChangeText={(val) => {
                       setPassword(val);
-                      if (error) clearError();
+                      if (localError) setLocalError(null);
+                      if (storeError) clearError();
                     }}
                     placeholder="Enter your archive passcode"
                     placeholderTextColor={colors.mutedInk}
@@ -279,15 +225,77 @@ export default function AuthModalScreen() {
                     />
                   </Pressable>
                 </View>
+
+                {/* Password Strength Indicator (Sign Up Only) */}
+                {isSignUp && password.length > 0 && (
+                  <View style={styles.strengthContainer}>
+                    <View style={styles.strengthBarsRow}>
+                      {[1, 2, 3, 4].map((level) => (
+                        <View
+                          key={level}
+                          style={[
+                            styles.strengthBar,
+                            strengthScore >= level && styles.strengthBarActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.strengthLabel}>
+                      {strengthScore <= 1 ? 'Basic key' : strengthScore <= 3 ? 'Good passcode' : 'Strong vault key'}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* Validation / Error Banner */}
-              {error && (
-                <View style={styles.errorBanner}>
-                  <Ionicons name="alert-circle-outline" size={18} color={colors.cinemaAmber} />
-                  <Text style={styles.errorText}>{error}</Text>
+              {/* Confirm Passcode (Sign Up Only) */}
+              {isSignUp && (
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Confirm Passcode</Text>
+                    {confirmPassword.length > 0 && confirmPassword === password && (
+                      <Text style={styles.matchText}>PASSCODE MATCHES</Text>
+                    )}
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={colors.mutedInk} style={styles.inputIcon} />
+                    <TextInput
+                      value={confirmPassword}
+                      onChangeText={(val) => {
+                        setConfirmPassword(val);
+                        if (localError) setLocalError(null);
+                      }}
+                      placeholder="Re-enter your archive passcode"
+                      placeholderTextColor={colors.mutedInk}
+                      secureTextEntry={!showPassword}
+                      style={styles.textInput}
+                      selectionColor={colors.cinemaAmber}
+                    />
+                  </View>
                 </View>
               )}
+
+              {/* Automatic Migration Guarantee Card (Sign Up Only) */}
+              {isSignUp && (
+                <View style={styles.migrationCard}>
+                  <View style={styles.migrationIconWrap}>
+                    <Ionicons name="shield-checkmark" size={18} color={colors.cinemaAmber} />
+                  </View>
+                  <View style={styles.migrationContent}>
+                    <Text style={styles.migrationTitle}>Automatic Migration</Text>
+                    <Text style={styles.migrationText}>
+                      Your cached watchlists and curated reviews will seamlessly bridge without data loss.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Validation / Error Banner */}
+              {displayError ? (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle-outline" size={18} color={colors.cinemaAmber} />
+                  <Text style={styles.errorText}>{displayError}</Text>
+                </View>
+              ) : null}
 
               {/* Primary Submit Button */}
               <Pressable
@@ -304,7 +312,7 @@ export default function AuthModalScreen() {
                 ) : (
                   <>
                     <Text style={styles.submitBtnText}>
-                      {isSignUp ? 'Create Member Vault' : 'Sign in to Collection'}
+                      {isSignUp ? 'Create account' : 'Sign in to Collection'}
                     </Text>
                     <Ionicons name="arrow-forward" size={18} color={colors.cinemaCanvas} />
                   </>
@@ -312,20 +320,45 @@ export default function AuthModalScreen() {
               </Pressable>
             </View>
 
+            {/* Visual Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>SYNC OR PREVIEW</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Google Social Connect Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+              disabled={isLoading}
+              onPress={handleGoogleSignIn}
+              style={({ pressed }) => [
+                styles.googleButton,
+                { opacity: pressed || isLoading ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
+              ]}
+            >
+              <View style={styles.googleIconCircle}>
+                <Ionicons name="logo-google" size={16} color={colors.cinemaAmber} />
+              </View>
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </Pressable>
+
             {/* Switch between Sign In / Sign Up */}
             <View style={styles.switchRow}>
               <Text style={styles.switchQuestion}>
-                {isSignUp ? 'Already have an archive account?' : 'Need a separate archive pass?'}
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
               </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
                   setIsSignUp(!isSignUp);
-                  if (error) clearError();
+                  setLocalError(null);
+                  if (storeError) clearError();
                 }}
               >
                 <Text style={styles.switchAction}>
-                  {isSignUp ? 'Sign In' : 'Create account'}
+                  {isSignUp ? 'Sign in' : 'Create account'}
                 </Text>
               </Pressable>
             </View>
@@ -341,7 +374,7 @@ export default function AuthModalScreen() {
               <Text style={styles.guestBtnText}>Continue as guest explorer</Text>
             </Pressable>
             <Text style={styles.guestSubtext}>
-              Browse catalog without cloud sync (Trailers may prompt for YouTube sign-in)
+              Browse curated lists without cloud sync
             </Text>
           </View>
 
@@ -351,7 +384,7 @@ export default function AuthModalScreen() {
               <Ionicons name="shield-outline" size={13} color={colors.mutedInk} />
               <Text style={styles.footerText}>256-BIT ENCRYPTED VAULT</Text>
             </View>
-            <Text style={styles.footerText}>v1.0.0 AUSTIN MOVIEBOX</Text>
+            <Text style={styles.footerText}>v2.4.0 CINÉ</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -417,6 +450,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.cinemaAmber,
+    shadowColor: colors.cinemaAmber,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
   },
   brandCine: {
     color: colors.primaryInk,
@@ -448,7 +486,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
   },
   headerBlock: {
-    marginBottom: 18,
+    marginBottom: 20,
   },
   headerTitle: {
     color: colors.primaryInk,
@@ -461,167 +499,6 @@ const styles = StyleSheet.create({
     color: colors.secondaryInk,
     fontSize: 13,
     lineHeight: 18,
-  },
-  requirementBanner: {
-    backgroundColor: 'rgba(229, 9, 20, 0.08)',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(229, 9, 20, 0.25)',
-    marginBottom: 20,
-    gap: 6,
-  },
-  requirementHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  youtubeIconBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FF0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  requirementTitle: {
-    color: '#FF4D4D',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    fontFamily: 'Courier',
-  },
-  requirementText: {
-    color: colors.primaryInk,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  highlightText: {
-    color: colors.cinemaAmber,
-    fontWeight: '700',
-  },
-  socialButtonsGroup: {
-    gap: 12,
-    marginBottom: 18,
-  },
-  youtubeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1C1517',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 0, 0, 0.45)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    shadowColor: '#FF0000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.quietStage,
-    borderWidth: 1,
-    borderColor: 'rgba(53, 56, 60, 0.8)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  socialButtonLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  youtubeRedCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FF0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(245, 197, 24, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 197, 24, 0.3)',
-  },
-  socialTextGroup: {
-    flex: 1,
-  },
-  youtubeButtonText: {
-    color: colors.primaryInk,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  googleButtonText: {
-    color: colors.primaryInk,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  socialSubtext: {
-    color: colors.secondaryInk,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  socialRightBadge: {
-    backgroundColor: 'rgba(255, 0, 0, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 0, 0.3)',
-  },
-  socialRightBadgeText: {
-    color: '#FF6B6B',
-    fontSize: 9,
-    fontWeight: '700',
-    fontFamily: 'Courier',
-    letterSpacing: 0.6,
-  },
-  googleRightBadge: {
-    backgroundColor: 'rgba(245, 197, 24, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 197, 24, 0.3)',
-  },
-  googleRightBadgeText: {
-    color: colors.cinemaAmber,
-    fontSize: 9,
-    fontWeight: '700',
-    fontFamily: 'Courier',
-    letterSpacing: 0.6,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(53, 56, 60, 0.4)',
-  },
-  dividerText: {
-    color: colors.mutedInk,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    fontFamily: 'Courier',
   },
   formInputs: {
     gap: 16,
@@ -643,6 +520,17 @@ const styles = StyleSheet.create({
     color: colors.mutedInk,
     fontSize: 10,
     fontFamily: 'Courier',
+  },
+  forgotLink: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontFamily: 'Courier',
+  },
+  matchText: {
+    color: colors.cinemaAmber,
+    fontSize: 10,
+    fontFamily: 'Courier',
+    fontWeight: '700',
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -666,6 +554,65 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 6,
   },
+  strengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  strengthBarsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    flex: 1,
+    marginRight: 12,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(53, 56, 60, 0.6)',
+  },
+  strengthBarActive: {
+    backgroundColor: colors.cinemaAmber,
+  },
+  strengthLabel: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontFamily: 'Courier',
+  },
+  migrationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(27, 29, 32, 0.8)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.5)',
+    gap: 12,
+    marginTop: 2,
+  },
+  migrationIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(215, 163, 91, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  migrationContent: {
+    flex: 1,
+  },
+  migrationTitle: {
+    color: colors.primaryInk,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  migrationText: {
+    color: colors.mutedInk,
+    fontSize: 11,
+    lineHeight: 15,
+  },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,14 +631,14 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     width: '100%',
-    height: 50,
+    height: 52,
     borderRadius: 14,
     backgroundColor: colors.cinemaAmber,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 4,
+    marginTop: 6,
     shadowColor: colors.cinemaAmber,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -700,25 +647,67 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     color: colors.cinemaCanvas,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 18,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(53, 56, 60, 0.4)',
+  },
+  dividerText: {
+    color: colors.mutedInk,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    fontFamily: 'Courier',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.quietStage,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 56, 60, 0.7)',
+    borderRadius: 14,
+    height: 48,
+  },
+  googleIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(215, 163, 91, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleButtonText: {
+    color: colors.primaryInk,
+    fontSize: 13,
+    fontWeight: '600',
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 18,
-    marginBottom: 12,
+    marginTop: 20,
+    marginBottom: 10,
   },
   switchQuestion: {
     color: colors.secondaryInk,
-    fontSize: 12,
+    fontSize: 13,
   },
   switchAction: {
     color: colors.cinemaAmber,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   guestBtn: {
@@ -727,6 +716,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     height: 40,
+    marginTop: 4,
   },
   guestBtnText: {
     color: colors.secondaryInk,
@@ -745,7 +735,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 18,
+    marginTop: 20,
     paddingHorizontal: 4,
   },
   footerLeft: {

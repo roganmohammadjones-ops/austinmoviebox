@@ -27,18 +27,10 @@ import { colors } from '../../theme/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isGuest, signOut, signInWithYouTube, signInWithGoogle, linkYouTube } = useAuthStore();
+  const { user, isGuest, signOut } = useAuthStore();
   const { favorites: rawFavorites, clearFavorites } = useFavoritesStore();
   const { resetOnboarding } = useOnboardingStore();
   const { themeMode, region, setThemeMode, setRegion, resetPreferences } = usePreferencesStore();
-
-  const isYouTubeConnected = Boolean(
-    user &&
-      (user.user_metadata?.youtube_connected ||
-        user.app_metadata?.provider === 'youtube' ||
-        user.app_metadata?.provider === 'google' ||
-        user.email?.toLowerCase().includes('@gmail.com'))
-  );
 
   const favorites = Array.isArray(rawFavorites) ? rawFavorites : [];
 
@@ -68,27 +60,6 @@ export default function ProfileScreen() {
 
   const handleSignIn = () => {
     router.push('/auth' as any);
-  };
-
-  const handleYouTubeSignIn = async () => {
-    const res = await signInWithYouTube();
-    if (res.success) {
-      showToast('YouTube account connected! Video playback unlocked.');
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    const res = await signInWithGoogle();
-    if (res.success) {
-      showToast('Google / Gmail connected! Video playback unlocked.');
-    }
-  };
-
-  const handleLinkYouTube = async () => {
-    const res = await linkYouTube();
-    if (res.success) {
-      showToast('YouTube stream access linked successfully!');
-    }
   };
 
   const handleConfirmSignOut = async () => {
@@ -182,13 +153,9 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.liveIndicator}>
-                <View style={[styles.pulseDot, isYouTubeConnected && { backgroundColor: '#34C759' }]} />
-                <Text style={[styles.liveIndicatorText, isYouTubeConnected && { color: '#34C759' }]}>
-                  {isGuest
-                    ? 'LOCAL CACHE'
-                    : isYouTubeConnected
-                    ? 'YOUTUBE VERIFIED'
-                    : 'CLOUD SYNCED'}
+                <View style={styles.pulseDot} />
+                <Text style={styles.liveIndicatorText}>
+                  {isGuest ? 'LOCAL CACHE' : 'CLOUD SYNCED'}
                 </Text>
               </View>
             </View>
@@ -201,62 +168,37 @@ export default function ProfileScreen() {
                     <Text style={styles.amberHighlight}>({favorites.length} titles saved)</Text>.
                   </Text>
                   <Text style={styles.bodySecondaryText}>
-                    Sign in with YouTube or Google / Gmail to unlock official theatrical trailers and sync your collection across devices.
-                  </Text>
-                </View>
-
-                {/* Theatrical Video Streaming Requirement Notice */}
-                <View style={styles.profileReqNotice}>
-                  <View style={styles.profileReqHeader}>
-                    <Ionicons name="logo-youtube" size={14} color="#FF0000" />
-                    <Text style={styles.profileReqTitle}>VIDEO PLAYBACK REQUIRES LOGIN</Text>
-                  </View>
-                  <Text style={styles.profileReqText}>
-                    Trailer streaming and age-gated studio videos require an active YouTube or Gmail account.
+                    Sign in or register to sync your watchlist, unlock custom reviews, and back up your vault across devices.
                   </Text>
                 </View>
 
                 <View style={styles.buttonsColumn}>
-                  {/* YouTube Action */}
+                  {/* Create Account Action */}
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Continue with YouTube"
-                    onPress={handleYouTubeSignIn}
+                    accessibilityLabel="Create account"
+                    onPress={handleCreateAccount}
                     style={({ pressed }) => [
-                      styles.profileYoutubeButton,
+                      styles.primaryButton,
                       { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
                     ]}
                   >
-                    <Ionicons name="logo-youtube" size={18} color="#FFFFFF" />
-                    <Text style={styles.profileYoutubeButtonText}>Continue with YouTube</Text>
+                    <Ionicons name="person-add" size={18} color={colors.cinemaCanvas} />
+                    <Text style={styles.primaryButtonText}>Create account</Text>
                   </Pressable>
 
-                  {/* Google / Gmail Action */}
+                  {/* Sign In Action */}
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Continue with Google or Gmail"
-                    onPress={handleGoogleSignIn}
-                    style={({ pressed }) => [
-                      styles.profileGoogleButton,
-                      { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-                    ]}
-                  >
-                    <Ionicons name="logo-google" size={17} color={colors.cinemaAmber} />
-                    <Text style={styles.profileGoogleButtonText}>Continue with Google / Gmail</Text>
-                  </Pressable>
-
-                  {/* Email & Passcode Modal Route */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Sign in with Email Passcode"
+                    accessibilityLabel="Sign in to existing account"
                     onPress={handleSignIn}
                     style={({ pressed }) => [
                       styles.secondaryButton,
                       { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
                     ]}
                   >
-                    <Ionicons name="mail-outline" size={18} color={colors.secondaryInk} />
-                    <Text style={styles.secondaryButtonText}>Sign in with Email Passcode</Text>
+                    <Ionicons name="log-in-outline" size={18} color={colors.secondaryInk} />
+                    <Text style={styles.secondaryButtonText}>Sign in to existing account</Text>
                   </Pressable>
                 </View>
               </>
@@ -267,39 +209,9 @@ export default function ProfileScreen() {
                     Authenticated as <Text style={styles.amberHighlight}>{user?.email}</Text>
                   </Text>
                   <Text style={styles.bodySecondaryText}>
-                    Your watchlist of {favorites.length} titles is securely backed up and synchronized
-                    with Supabase cloud.
+                    Your watchlist of {favorites.length} titles is securely backed up and synchronized with cloud storage.
                   </Text>
                 </View>
-
-                {/* YouTube Streaming Status in Profile */}
-                {isYouTubeConnected ? (
-                  <View style={styles.youtubeConnectedBanner}>
-                    <Ionicons name="shield-checkmark" size={16} color="#34C759" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.youtubeConnectedTitle}>YouTube Video Streaming Active</Text>
-                      <Text style={styles.youtubeConnectedSub}>Unrestricted theatrical trailer streams authorized.</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.profileReqNotice}>
-                    <View style={styles.profileReqHeader}>
-                      <Ionicons name="logo-youtube" size={14} color="#FF0000" />
-                      <Text style={styles.profileReqTitle}>YOUTUBE STREAM NOT LINKED</Text>
-                    </View>
-                    <Text style={styles.profileReqText}>
-                      Link your YouTube or Gmail account to enable unrestricted theatrical trailer streams.
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Link YouTube Account"
-                      onPress={handleLinkYouTube}
-                      style={styles.profileLinkYoutubeBtn}
-                    >
-                      <Text style={styles.profileLinkYoutubeBtnText}>Link YouTube Account</Text>
-                    </Pressable>
-                  </View>
-                )}
 
                 <View style={styles.buttonsColumn}>
                   <Pressable

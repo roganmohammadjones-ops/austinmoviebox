@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,10 +12,9 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchMovieTrailerKey, openMovieTrailer } from '../services/movie-api';
-import { useAuthStore } from '../stores/auth-store';
+import { WebView } from 'react-native-webview';
+import { fetchMovieTrailerKey } from '../services/movie-api';
 import { colors } from '../theme/tokens';
 import { Movie } from '../types';
 import { FavoriteButton } from './favorite-button';
@@ -32,19 +30,9 @@ export function TheatricalVideoPlayer({
   visible,
   onClose,
 }: TheatricalVideoPlayerProps) {
-  const router = useRouter();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const { user, signInWithYouTube } = useAuthStore();
-  const isYouTubeConnected = Boolean(
-    user &&
-      (user.user_metadata?.youtube_connected ||
-        user.app_metadata?.provider === 'youtube' ||
-        user.app_metadata?.provider === 'google' ||
-        user.email?.toLowerCase().includes('@gmail.com'))
-  );
 
   const isSmallDevice = windowWidth <= 360;
   const isDesktop = windowWidth >= 1024;
@@ -171,39 +159,15 @@ export function TheatricalVideoPlayer({
               allowFullScreen
             />
           ) : (
-            <View style={styles.nativeStage}>
-              {movie.backdropUrl ? (
-                <Image
-                  source={{ uri: movie.backdropUrl }}
-                  style={styles.nativeBackdrop}
-                  contentFit="cover"
-                  transition={300}
-                />
-              ) : null}
-              <View style={styles.nativeScrim} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Play official trailer in full screen"
-                onPress={() => {
-                  const targetMovie = trailerKey ? { ...movie, youtubeKey: trailerKey } : movie;
-                  openMovieTrailer(targetMovie);
-                }}
-                style={({ pressed }) => [
-                  styles.nativePlayCta,
-                  { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] },
-                ]}
-              >
-                <View style={styles.nativePlayCircle}>
-                  <Ionicons name="play" size={32} color={colors.cinemaCanvas} style={{ marginLeft: 3 }} />
-                </View>
-                <View style={styles.nativePlayBadge}>
-                  <Ionicons name="logo-youtube" size={14} color="#FF0000" />
-                  <Text style={styles.nativePlayText}>
-                    {isYouTubeConnected ? 'LAUNCH TRAILER IN FULLSCREEN' : 'LAUNCH TRAILER (YOUTUBE REQUIRED)'}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
+            <WebView
+              source={{ uri: embedUrl }}
+              style={styles.webView}
+              allowsFullscreenVideo
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              javaScriptEnabled
+              domStorageEnabled
+            />
           )}
         </View>
 
@@ -244,18 +208,6 @@ export function TheatricalVideoPlayer({
             </View>
 
             <View style={styles.actionRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open trailer directly on YouTube"
-                onPress={() => {
-                  const targetMovie = trailerKey ? { ...movie, youtubeKey: trailerKey } : movie;
-                  openMovieTrailer(targetMovie);
-                }}
-                style={({ pressed }) => [styles.youtubeBtn, { opacity: pressed ? 0.75 : 1 }]}
-              >
-                <Ionicons name="logo-youtube" size={19} color="#FF0000" />
-              </Pressable>
-
               <FavoriteButton movie={movie} size={44} iconSize={20} variant="solid" />
 
               <Pressable
@@ -269,72 +221,18 @@ export function TheatricalVideoPlayer({
             </View>
           </View>
 
-          {/* YouTube Streaming Requirement Banner / Verification Indicator */}
-          {isYouTubeConnected ? (
-            <View style={styles.verifiedShelf}>
-              <View style={styles.verifiedLeft}>
-                <Ionicons name="shield-checkmark" size={14} color="#34C759" />
-                <Text style={styles.verifiedText}>
-                  YouTube Stream Active:{' '}
-                  <Text style={styles.verifiedUser}>
-                    {user?.email || (user?.user_metadata?.name ? `${user.user_metadata.name}@gmail.com` : 'Verified Curator')}
-                  </Text>
-                </Text>
-              </View>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedBadgeText}>UNRESTRICTED HD</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.authNoticeCard}>
-              <View style={styles.authNoticeTop}>
-                <View style={styles.authNoticeHeader}>
-                  <View style={styles.youtubeMiniBadge}>
-                    <Ionicons name="logo-youtube" size={12} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.authNoticeTitle}>YOUTUBE / GMAIL LOGIN REQUIRED</Text>
-                </View>
-                <View style={styles.authNoticeBadge}>
-                  <Text style={styles.authNoticeBadgeText}>RESTRICTED STREAMS</Text>
-                </View>
-              </View>
-              <Text style={styles.authNoticeDesc}>
-                Age-restricted trailers & official studio previews require an authenticated YouTube or Gmail account.
+          {/* In-App Theatrical Streaming Quality Bar */}
+          <View style={styles.theatricalStreamStatus}>
+            <View style={styles.theatricalStreamLeft}>
+              <View style={styles.liveStreamDot} />
+              <Text style={styles.theatricalStreamText}>
+                IN-APP THEATRICAL PLAYBACK ACTIVE
               </Text>
-              <View style={styles.authNoticeActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Sign in with YouTube or Gmail"
-                  onPress={() => {
-                    onClose();
-                    router.push('/auth' as any);
-                  }}
-                  style={({ pressed }) => [
-                    styles.authNoticeBtn,
-                    { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-                  ]}
-                >
-                  <Ionicons name="logo-youtube" size={14} color="#FFFFFF" />
-                  <Text style={styles.authNoticeBtnText}>Sign in with YouTube / Gmail</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Quick connect YouTube"
-                  onPress={async () => {
-                    await signInWithYouTube();
-                  }}
-                  style={({ pressed }) => [
-                    styles.quickConnectBtn,
-                    { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-                  ]}
-                >
-                  <Ionicons name="flash" size={12} color={colors.cinemaAmber} />
-                  <Text style={styles.quickConnectBtnText}>1-Tap Link</Text>
-                </Pressable>
-              </View>
             </View>
-          )}
+            <View style={styles.theatricalStreamBadge}>
+              <Text style={styles.theatricalStreamBadgeText}>1080P HD · DOLBY AUDIO</Text>
+            </View>
+          </View>
 
           {movie.overview ? (
             <Text
@@ -435,56 +333,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(53, 56, 60, 0.4)',
   },
-  nativeStage: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nativeBackdrop: {
-    ...StyleSheet.absoluteFill,
+  webView: {
     width: '100%',
     height: '100%',
-  },
-  nativeScrim: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(10, 10, 12, 0.65)',
-  },
-  nativePlayCta: {
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 10,
-  },
-  nativePlayCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.cinemaAmber,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.cinemaAmber,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  nativePlayBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(17, 18, 20, 0.92)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: 'rgba(53, 56, 60, 0.7)',
-  },
-  nativePlayText: {
-    color: colors.primaryInk,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    fontFamily: 'Courier',
+    backgroundColor: '#000000',
   },
   loadingContainer: {
     ...StyleSheet.absoluteFill,
@@ -610,134 +462,46 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-  verifiedShelf: {
+  theatricalStreamStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(52, 199, 89, 0.08)',
+    backgroundColor: colors.quietStage,
     borderWidth: 1,
-    borderColor: 'rgba(52, 199, 89, 0.25)',
+    borderColor: 'rgba(215, 163, 91, 0.25)',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginVertical: 4,
   },
-  verifiedLeft: {
+  theatricalStreamLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flex: 1,
   },
-  verifiedText: {
+  liveStreamDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.cinemaAmber,
+  },
+  theatricalStreamText: {
     color: colors.primaryInk,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  verifiedUser: {
-    color: '#34C759',
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  verifiedBadge: {
-    backgroundColor: 'rgba(52, 199, 89, 0.15)',
+  theatricalStreamBadge: {
+    backgroundColor: 'rgba(215, 163, 91, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 9999,
   },
-  verifiedBadgeText: {
-    color: '#34C759',
+  theatricalStreamBadgeText: {
+    color: colors.cinemaAmber,
     fontSize: 9,
     fontWeight: '700',
-    fontFamily: 'Courier',
     letterSpacing: 0.6,
-  },
-  authNoticeCard: {
-    backgroundColor: '#1C1517',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 0, 0.35)',
-    borderRadius: 14,
-    padding: 12,
-    marginVertical: 4,
-    gap: 8,
-  },
-  authNoticeTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  authNoticeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  youtubeMiniBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FF0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  authNoticeTitle: {
-    color: '#FF6B6B',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    fontFamily: 'Courier',
-  },
-  authNoticeBadge: {
-    backgroundColor: 'rgba(255, 0, 0, 0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 9999,
-  },
-  authNoticeBadgeText: {
-    color: '#FF6B6B',
-    fontSize: 9,
-    fontWeight: '700',
-    fontFamily: 'Courier',
-    letterSpacing: 0.5,
-  },
-  authNoticeDesc: {
-    color: colors.primaryInk,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  authNoticeActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  authNoticeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#FF0000',
-    height: 38,
-    borderRadius: 10,
-  },
-  authNoticeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickConnectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: colors.quietStage,
-    height: 38,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(53, 56, 60, 0.8)',
-  },
-  quickConnectBtnText: {
-    color: colors.primaryInk,
-    fontSize: 11,
-    fontWeight: '600',
   },
 });
