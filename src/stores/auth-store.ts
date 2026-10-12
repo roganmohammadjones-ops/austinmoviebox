@@ -234,7 +234,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            scopes: 'email profile https://www.googleapis.com/auth/youtube.readonly',
+            scopes: 'email profile',
             redirectTo: redirectUrl,
             skipBrowserRedirect: Platform.OS !== 'web',
           },
@@ -349,7 +349,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            scopes: 'email profile https://www.googleapis.com/auth/youtube.readonly',
+            scopes: 'email profile',
             redirectTo: redirectUrl,
             skipBrowserRedirect: Platform.OS !== 'web',
           },
