@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -9,10 +9,10 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { openMovieTrailer } from '../services/movie-api';
 import { colors } from '../theme/tokens';
 import { Movie } from '../types';
 import { FavoriteButton } from './favorite-button';
+import { TheatricalVideoPlayer } from './theatrical-video-player';
 
 interface MovieHeroProps {
   movie: Movie;
@@ -21,6 +21,7 @@ interface MovieHeroProps {
 export function MovieHero({ movie }: MovieHeroProps) {
   const router = useRouter();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [isPlayingTrailer, setIsPlayingTrailer] = useState<boolean>(false);
 
   const isSmallDevice = windowWidth <= 360;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -57,9 +58,7 @@ export function MovieHero({ movie }: MovieHeroProps) {
   };
 
   const handlePlayTrailer = () => {
-    if (movie) {
-      openMovieTrailer(movie);
-    }
+    setIsPlayingTrailer(true);
   };
 
   const duration = movie.durationMinutes || 0;
@@ -191,6 +190,13 @@ export function MovieHero({ movie }: MovieHeroProps) {
           </View>
         </View>
       </View>
+
+      {/* In-App Theatrical Video Player Modal */}
+      <TheatricalVideoPlayer
+        movie={movie}
+        visible={isPlayingTrailer}
+        onClose={() => setIsPlayingTrailer(false)}
+      />
     </View>
   );
 }
