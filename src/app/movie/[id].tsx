@@ -123,7 +123,7 @@ export default function MovieDetailScreen() {
     try {
       await Share.share({
         title: movie.title,
-        message: `Check out "${movie.title}" (${movie.releaseYear || 'TMDB'}) on Austin MovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
+        message: `Check out "${movie.title}" (${movie.releaseYear || 'TMDB'}) on AustinMovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
       });
     } catch {
       // share dismissed

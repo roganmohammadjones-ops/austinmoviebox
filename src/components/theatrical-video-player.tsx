@@ -90,7 +90,7 @@ export function TheatricalVideoPlayer({
     try {
       await Share.share({
         title: movie.title,
-        message: `Watching "${movie.title}" on Austin MovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
+        message: `Watching "${movie.title}" on AustinMovieBox! Rated ★ ${movie.rating.toFixed(1)}/10.`,
       });
     } catch {
       // dismissed
@@ -254,7 +254,7 @@ export function TheatricalVideoPlayer({
             ]}
           >
             <Ionicons name="chevron-down" size={18} color={colors.cinemaCanvas} />
-            <Text style={styles.dismissBtnText}>Return to Austin MovieBox</Text>
+            <Text style={styles.dismissBtnText}>Return to AustinMovieBox</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>

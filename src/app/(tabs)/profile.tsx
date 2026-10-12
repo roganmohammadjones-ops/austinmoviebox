@@ -574,7 +574,7 @@ export default function ProfileScreen() {
               {/* Row 6: About & Film Data */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="About Austin MovieBox and TMDB film data"
+                accessibilityLabel="About AustinMovieBox and TMDB film data"
                 onPress={() => setAboutModalVisible(true)}
                 style={({ pressed }) => [
                   styles.settingRow,
@@ -979,7 +979,7 @@ export default function ProfileScreen() {
 
               <View style={styles.diagRow}>
                 <Text style={styles.diagLabel}>Client Build</Text>
-                <Text style={styles.diagValueText}>Austin MovieBox v2.4.0</Text>
+                <Text style={styles.diagValueText}>AustinMovieBox v2.4.0</Text>
               </View>
             </View>
 
@@ -1031,8 +1031,13 @@ export default function ProfileScreen() {
           <Pressable style={styles.modalDialog} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
               <View style={styles.modalHeaderTitleBox}>
-                <Ionicons name="film-outline" size={20} color={colors.cinemaAmber} />
-                <Text style={styles.modalTitle}>About Austin MovieBox</Text>
+                <Image
+                  source={require('../../../assets/images/logo-emblem.png')}
+                  style={styles.modalHeaderLogo}
+                  contentFit="contain"
+                  accessibilityLabel="AustinMovieBox Logo"
+                />
+                <Text style={styles.modalTitle}>About AustinMovieBox</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -1044,7 +1049,13 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.aboutBannerBox}>
-              <Text style={styles.aboutTitle}>Austin MovieBox</Text>
+              <Image
+                source={require('../../../assets/images/logo.png')}
+                style={styles.aboutHeroLogo}
+                contentFit="contain"
+                accessibilityLabel="AustinMovieBox Logo"
+              />
+              <Text style={styles.aboutTitle}>AustinMovieBox</Text>
               <Text style={styles.aboutTagline}>
                 Cinematic discovery engine & offline watchlist vault
               </Text>
@@ -2014,6 +2025,15 @@ const styles = StyleSheet.create({
   },
 
   // About Modal Styles
+  modalHeaderLogo: {
+    width: 22,
+    height: 22,
+  },
+  aboutHeroLogo: {
+    width: 120,
+    height: 120,
+    marginBottom: 10,
+  },
   aboutBannerBox: {
     backgroundColor: colors.quietStage,
     borderRadius: 14,
