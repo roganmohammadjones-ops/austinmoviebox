@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { Redirect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -16,9 +16,12 @@ export default function IndexScreen() {
   if (!isLoaded || !mounted) {
     return (
       <View style={styles.splashContainer}>
-        <View style={styles.logoBadge}>
-          <Ionicons name="film" size={32} color={colors.cinemaAmber} />
-        </View>
+        <Image
+          source={require('../../assets/images/logo-emblem.png')}
+          style={styles.logoImage}
+          contentFit="contain"
+          accessibilityLabel="AustinMovieBox Logo"
+        />
         <Text style={styles.logoTitle}>AUSTIN MOVIEBOX</Text>
         <Text style={styles.logoSubtitle}>CURATED THEATRICAL ARCHIVE</Text>
         <ActivityIndicator color={colors.cinemaAmber} style={styles.spinner} />
@@ -41,16 +44,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.quietStage,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 80,
+    height: 80,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(53, 56, 60, 0.5)',
   },
   logoTitle: {
     color: colors.primaryInk,

@@ -3,8 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { Database } from '../types/database';
 
-const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() || '';
-const rawAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
+const defaultSupabaseUrl = 'https://bvbhiqwaeycnhoqfkrpj.supabase.co';
+const defaultSupabaseAnonKey =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2YmhpcXdhZXljbmhvcWZrcnBqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDgyMDAsImV4cCI6MjEwNjkyNDIwMH0.yI2ORTDDXSyRUH8z8eMmeIJ4eg0s4fcC9bSW5ePXmy8';
+
+const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() || defaultSupabaseUrl;
+const rawAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || defaultSupabaseAnonKey;
 
 export const isSupabaseConfigured: boolean = Boolean(
   rawUrl &&

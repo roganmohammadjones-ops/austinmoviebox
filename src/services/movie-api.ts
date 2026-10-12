@@ -10,8 +10,12 @@ import { Linking, Platform } from 'react-native';
 import { Movie } from '../types';
 
 // TMDB Configuration from environment variables
-const rawApiKey = process.env.EXPO_PUBLIC_TMDB_API_KEY?.trim() || '';
-const rawAccessToken = process.env.EXPO_PUBLIC_TMDB_ACCESS_TOKEN?.trim() || '';
+const defaultTmdbApiKey = 'd713b8b71e557bd1d18b9b230d0c4a7a';
+const defaultTmdbAccessToken =
+  'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkNzEzYjhiNzFlNTU3YmQxZDE4YjliMjMwZDBjNGE3YSIsIm5iZiI6MTc5MTc3NzI1Ni4wOTQsInN1YiI6IjZhY2M1OWU4MTBhM2RiMDIwY2RlYWYwMyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.CIEwkGKOqydyDcxCL4MXPV4crX2-KP5jIy-7JMFJEqk';
+
+const rawApiKey = process.env.EXPO_PUBLIC_TMDB_API_KEY?.trim() || defaultTmdbApiKey;
+const rawAccessToken = process.env.EXPO_PUBLIC_TMDB_ACCESS_TOKEN?.trim() || defaultTmdbAccessToken;
 const baseUrl =
   process.env.EXPO_PUBLIC_TMDB_BASE_URL?.trim() || 'https://api.themoviedb.org/3';
 const imageBaseUrl =

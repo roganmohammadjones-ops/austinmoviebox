@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -20,6 +21,7 @@ import {
   fetchPopularMovies,
   fetchTopRatedMovies,
   fetchTrendingMovies,
+  isTmdbConfigured,
 } from '../../services/movie-api';
 import { useAuthStore } from '../../stores/auth-store';
 import { colors } from '../../theme/tokens';
@@ -76,7 +78,11 @@ export default function HomeScreen() {
         topRated.length === 0 &&
         newReleases.length === 0
       ) {
-        setError('No movies returned from TMDB API. Please verify your connection.');
+        if (!isTmdbConfigured) {
+          setError('TMDB credentials missing in build configuration.');
+        } else {
+          setError('Unable to load theatrical archive. Please verify your connection.');
+        }
       }
     } catch (err: any) {
       console.error('[HomeScreen] Error loading movies from TMDB:', err);
@@ -110,7 +116,11 @@ export default function HomeScreen() {
           topRated.length === 0 &&
           newReleases.length === 0
         ) {
-          setError('No movies returned from TMDB API. Please verify your connection.');
+          if (!isTmdbConfigured) {
+            setError('TMDB credentials missing in build configuration.');
+          } else {
+            setError('Unable to load theatrical archive. Please verify your connection.');
+          }
         }
       } catch (err: any) {
         if (!isMounted) return;
@@ -178,7 +188,12 @@ export default function HomeScreen() {
         <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
           <View style={styles.headerLeft}>
             <View style={styles.brandBadge}>
-              <Ionicons name="film-outline" size={13} color={colors.cinemaAmber} />
+              <Image
+                source={require('../../../assets/images/logo-emblem.png')}
+                style={styles.brandBadgeLogo}
+                contentFit="contain"
+                accessibilityLabel="AustinMovieBox Logo"
+              />
               <Text style={styles.brandBadgeText}>AUSTIN MOVIEBOX</Text>
             </View>
             <View style={styles.titleRow}>
@@ -389,6 +404,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
+  },
+  brandBadgeLogo: {
+    width: 16,
+    height: 16,
   },
   brandBadgeText: {
     color: colors.cinemaAmber,

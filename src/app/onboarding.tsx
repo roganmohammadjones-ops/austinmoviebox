@@ -78,9 +78,14 @@ export default function OnboardingScreen() {
       {/* Top Utility Bar */}
       <View style={styles.topBar}>
         <View style={styles.brandGroup}>
-          <View style={styles.brandIconBox}>
-            <Ionicons name="film-outline" size={16} color={colors.cinemaAmber} />
-          </View>
+          <Image
+            source={require('../../assets/images/logo-emblem.png')}
+            style={styles.brandIconBox}
+            contentFit="contain"
+            accessibilityLabel="AustinMovieBox Logo"
+          />
+          <Text style={styles.brandTitleText}>AustinMovieBox</Text>
+          <Text style={styles.brandDotDivider}>•</Text>
           <Text style={styles.stepText}>{slide.step}</Text>
         </View>
 
@@ -195,10 +200,17 @@ const styles = StyleSheet.create({
   brandIconBox: {
     width: 28,
     height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.quietStage,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  brandTitleText: {
+    color: colors.primaryInk,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    fontFamily: 'Courier',
+  },
+  brandDotDivider: {
+    color: colors.mutedInk,
+    fontSize: 12,
   },
   stepText: {
     color: colors.secondaryInk,

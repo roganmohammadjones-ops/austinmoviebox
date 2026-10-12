@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -136,9 +137,13 @@ export default function AuthModalScreen() {
             {/* Editorial Brand Mark */}
             <View style={styles.brandMarkRow}>
               <View style={styles.brandMark}>
-                <View style={styles.brandDot} />
-                <Text style={styles.brandCine}>CINÉ</Text>
-                <Text style={styles.brandArchive}>ARCHIVE</Text>
+                <Image
+                  source={require('../../assets/images/logo-emblem.png')}
+                  style={styles.brandLogoImage}
+                  contentFit="contain"
+                  accessibilityLabel="AustinMovieBox Logo"
+                />
+                <Text style={styles.brandTitleText}>AustinMovieBox</Text>
               </View>
 
               <View style={styles.memberPassBadge}>
@@ -384,7 +389,7 @@ export default function AuthModalScreen() {
               <Ionicons name="shield-outline" size={13} color={colors.mutedInk} />
               <Text style={styles.footerText}>256-BIT ENCRYPTED VAULT</Text>
             </View>
-            <Text style={styles.footerText}>v2.4.0 CINÉ</Text>
+            <Text style={styles.footerText}>AustinMovieBox v2.4.0</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -443,30 +448,17 @@ const styles = StyleSheet.create({
   brandMark: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  brandDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.cinemaAmber,
-    shadowColor: colors.cinemaAmber,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
+  brandLogoImage: {
+    width: 24,
+    height: 24,
   },
-  brandCine: {
+  brandTitleText: {
     color: colors.primaryInk,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 1.2,
-    fontFamily: 'Courier',
-  },
-  brandArchive: {
-    color: colors.mutedInk,
-    fontSize: 11,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     fontFamily: 'Courier',
   },
   memberPassBadge: {
