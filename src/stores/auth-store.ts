@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const GUEST_STORAGE_KEY = '@moviebox_is_guest';
 
@@ -219,14 +224,73 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (isSupabaseConfigured) {
       try {
+        const redirectUrl =
+          Platform.OS === 'web'
+            ? typeof window !== 'undefined'
+              ? `${window.location.origin}/auth-callback`
+              : 'austinmoviebox://auth-callback'
+            : Linking.createURL('auth-callback');
+
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
             scopes: 'email profile https://www.googleapis.com/auth/youtube.readonly',
-            redirectTo: 'austinmoviebox://auth-callback',
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: Platform.OS !== 'web',
           },
         });
-        if (!error && data?.url) {
+
+        if (error) {
+          throw error;
+        }
+
+        if (Platform.OS !== 'web' && data?.url) {
+          const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          if (authResult.type === 'success' && authResult.url) {
+            const parsed = Linking.parse(authResult.url);
+            let accessToken = parsed.queryParams?.access_token as string | undefined;
+            let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
+            let code = parsed.queryParams?.code as string | undefined;
+
+            if (!accessToken && authResult.url.includes('#')) {
+              const fragment = authResult.url.split('#')[1] || '';
+              const params = new URLSearchParams(fragment);
+              accessToken = params.get('access_token') || undefined;
+              refreshToken = params.get('refresh_token') || undefined;
+              code = params.get('code') || undefined;
+            }
+
+            if (accessToken && refreshToken) {
+              const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!sessionErr && sessionData.user) {
+                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+                set({
+                  user: sessionData.user,
+                  session: sessionData.session,
+                  isGuest: false,
+                  isLoading: false,
+                });
+                return { success: true };
+              }
+            } else if (code) {
+              const { data: exchangeData, error: exchangeErr } =
+                await supabase.auth.exchangeCodeForSession(code);
+              if (!exchangeErr && exchangeData.user) {
+                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+                set({
+                  user: exchangeData.user,
+                  session: exchangeData.session,
+                  isGuest: false,
+                  isLoading: false,
+                });
+                return { success: true };
+              }
+            }
+          }
+        } else if (Platform.OS === 'web') {
           set({ isLoading: false });
           return { success: true };
         }
@@ -275,14 +339,73 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (isSupabaseConfigured) {
       try {
+        const redirectUrl =
+          Platform.OS === 'web'
+            ? typeof window !== 'undefined'
+              ? `${window.location.origin}/auth-callback`
+              : 'austinmoviebox://auth-callback'
+            : Linking.createURL('auth-callback');
+
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
             scopes: 'email profile https://www.googleapis.com/auth/youtube.readonly',
-            redirectTo: 'austinmoviebox://auth-callback',
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: Platform.OS !== 'web',
           },
         });
-        if (!error && data?.url) {
+
+        if (error) {
+          throw error;
+        }
+
+        if (Platform.OS !== 'web' && data?.url) {
+          const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          if (authResult.type === 'success' && authResult.url) {
+            const parsed = Linking.parse(authResult.url);
+            let accessToken = parsed.queryParams?.access_token as string | undefined;
+            let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
+            let code = parsed.queryParams?.code as string | undefined;
+
+            if (!accessToken && authResult.url.includes('#')) {
+              const fragment = authResult.url.split('#')[1] || '';
+              const params = new URLSearchParams(fragment);
+              accessToken = params.get('access_token') || undefined;
+              refreshToken = params.get('refresh_token') || undefined;
+              code = params.get('code') || undefined;
+            }
+
+            if (accessToken && refreshToken) {
+              const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!sessionErr && sessionData.user) {
+                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+                set({
+                  user: sessionData.user,
+                  session: sessionData.session,
+                  isGuest: false,
+                  isLoading: false,
+                });
+                return { success: true };
+              }
+            } else if (code) {
+              const { data: exchangeData, error: exchangeErr } =
+                await supabase.auth.exchangeCodeForSession(code);
+              if (!exchangeErr && exchangeData.user) {
+                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+                set({
+                  user: exchangeData.user,
+                  session: exchangeData.session,
+                  isGuest: false,
+                  isLoading: false,
+                });
+                return { success: true };
+              }
+            }
+          }
+        } else if (Platform.OS === 'web') {
           set({ isLoading: false });
           return { success: true };
         }
