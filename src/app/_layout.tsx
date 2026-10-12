@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import { useAuthStore } from '../stores/auth-store';
 import { useFavoritesStore } from '../stores/favorites-store';
 import { useOnboardingStore } from '../stores/onboarding-store';
+import { usePreferencesStore } from '../stores/preferences-store';
 import { colors } from '../theme/tokens';
 
 export default function RootLayout() {
@@ -17,6 +18,7 @@ export default function RootLayout() {
           useOnboardingStore.getState().loadOnboarding(),
           useFavoritesStore.getState().hydrateFavorites(),
           useAuthStore.getState().initializeAuth(),
+          usePreferencesStore.getState().loadPreferences(),
         ]);
       } catch (e) {
         console.warn('Bootstrap failed:', e);
