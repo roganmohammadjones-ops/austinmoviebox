@@ -93,11 +93,13 @@ export default function AuthModalScreen() {
     if (storeError) clearError();
     const res = await signInWithGoogle(email ? email.trim() : undefined);
     if (res.success) {
-      const user = useAuthStore.getState().user;
-      if (user) {
-        await syncWithCloud(user.id);
+      if (Platform.OS !== 'web') {
+        const user = useAuthStore.getState().user;
+        if (user) {
+          await syncWithCloud(user.id);
+        }
+        router.back();
       }
-      router.back();
     }
   };
 

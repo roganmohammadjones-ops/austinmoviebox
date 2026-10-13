@@ -62,19 +62,20 @@ function getHeaders(): HeadersInit {
  */
 function buildUrl(endpoint: string, params: Record<string, string | number> = {}): string {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = new URL(`${baseUrl}${cleanEndpoint}`);
+  const queryParts: string[] = [];
 
   if (rawApiKey && !rawApiKey.includes('your_tmdb_api_key')) {
-    url.searchParams.set('api_key', rawApiKey);
+    queryParts.push(`api_key=${encodeURIComponent(rawApiKey)}`);
   }
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value));
+      queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
     }
   });
 
-  return url.toString();
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+  return `${baseUrl}${cleanEndpoint}${queryString}`;
 }
 
 /**

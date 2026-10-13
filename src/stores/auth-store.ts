@@ -222,230 +222,298 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     const targetEmail = customEmail?.trim() || 'curator@gmail.com';
 
-    if (isSupabaseConfigured) {
-      try {
-        const redirectUrl =
-          Platform.OS === 'web'
-            ? typeof window !== 'undefined'
-              ? `${window.location.origin}/auth-callback`
-              : 'austinmoviebox://auth-callback'
-            : Linking.createURL('auth-callback');
-
-        const { data, error } = await supabase.auth.signInWithOAuth({
+    if (!isSupabaseConfigured) {
+      // Offline / Local mock sign in for testing
+      const googleUser = {
+        id: 'google_usr_' + Date.now(),
+        email: targetEmail,
+        app_metadata: { provider: 'google' },
+        user_metadata: {
+          name: targetEmail.split('@')[0],
+          full_name: 'Verified Google Cinema Curator',
           provider: 'google',
-          options: {
-            scopes: 'email profile',
-            redirectTo: redirectUrl,
-            skipBrowserRedirect: Platform.OS !== 'web',
-          },
-        });
+          youtube_connected: true,
+          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160',
+        },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+      } as unknown as User;
 
-        if (error) {
-          throw error;
-        }
+      const mockSession = {
+        access_token: 'google_oauth_token_' + Date.now(),
+        token_type: 'bearer',
+        expires_in: 86400,
+        refresh_token: 'google_refresh_token',
+        user: googleUser,
+      } as Session;
 
-        if (Platform.OS !== 'web' && data?.url) {
-          const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          if (authResult.type === 'success' && authResult.url) {
-            const parsed = Linking.parse(authResult.url);
-            let accessToken = parsed.queryParams?.access_token as string | undefined;
-            let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
-            let code = parsed.queryParams?.code as string | undefined;
-
-            if (!accessToken && authResult.url.includes('#')) {
-              const fragment = authResult.url.split('#')[1] || '';
-              const params = new URLSearchParams(fragment);
-              accessToken = params.get('access_token') || undefined;
-              refreshToken = params.get('refresh_token') || undefined;
-              code = params.get('code') || undefined;
-            }
-
-            if (accessToken && refreshToken) {
-              const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              if (!sessionErr && sessionData.user) {
-                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-                set({
-                  user: sessionData.user,
-                  session: sessionData.session,
-                  isGuest: false,
-                  isLoading: false,
-                });
-                return { success: true };
-              }
-            } else if (code) {
-              const { data: exchangeData, error: exchangeErr } =
-                await supabase.auth.exchangeCodeForSession(code);
-              if (!exchangeErr && exchangeData.user) {
-                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-                set({
-                  user: exchangeData.user,
-                  session: exchangeData.session,
-                  isGuest: false,
-                  isLoading: false,
-                });
-                return { success: true };
-              }
-            }
-          }
-        } else if (Platform.OS === 'web') {
-          set({ isLoading: false });
-          return { success: true };
-        }
-      } catch (err) {
-        console.warn('[AuthStore] Supabase Google OAuth fallback to verified local profile:', err);
-      }
+      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+      set({
+        user: googleUser,
+        session: mockSession,
+        isGuest: false,
+        isLoading: false,
+      });
+      return { success: true };
     }
 
-    // Provision verified Google account profile
-    const googleUser = {
-      id: 'google_usr_' + Date.now(),
-      email: targetEmail,
-      app_metadata: { provider: 'google' },
-      user_metadata: {
-        name: targetEmail.split('@')[0],
-        full_name: 'Verified Google Cinema Curator',
+    try {
+      const redirectUrl =
+        Platform.OS === 'web'
+          ? typeof window !== 'undefined'
+            ? `${window.location.origin}/auth-callback`
+            : 'austinmoviebox://auth-callback'
+          : Linking.createURL('auth-callback');
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        youtube_connected: true,
-        avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160',
-      },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-    } as unknown as User;
+        options: {
+          scopes: 'email profile',
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
 
-    const mockSession = {
-      access_token: 'google_oauth_token_' + Date.now(),
-      token_type: 'bearer',
-      expires_in: 86400,
-      refresh_token: 'google_refresh_token',
-      user: googleUser,
-    } as Session;
+      if (error) {
+        set({ error: error.message, isLoading: false });
+        return { success: false, error: error.message };
+      }
 
-    await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-    set({
-      user: googleUser,
-      session: mockSession,
-      isGuest: false,
-      isLoading: false,
-    });
-    return { success: true };
+      if (Platform.OS !== 'web' && data?.url) {
+        const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        if (authResult.type === 'success' && authResult.url) {
+          const parsed = Linking.parse(authResult.url);
+          const urlError = (parsed.queryParams?.error_description || parsed.queryParams?.error) as string | undefined;
+          if (urlError) {
+            set({ error: urlError, isLoading: false });
+            return { success: false, error: urlError };
+          }
+
+          let accessToken = parsed.queryParams?.access_token as string | undefined;
+          let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
+          let code = parsed.queryParams?.code as string | undefined;
+
+          if (!accessToken && authResult.url.includes('#')) {
+            const fragment = authResult.url.split('#')[1] || '';
+            const params = new URLSearchParams(fragment);
+            const hashError = params.get('error_description') || params.get('error');
+            if (hashError) {
+              set({ error: hashError, isLoading: false });
+              return { success: false, error: hashError };
+            }
+            accessToken = params.get('access_token') || undefined;
+            refreshToken = params.get('refresh_token') || undefined;
+            code = params.get('code') || undefined;
+          }
+
+          if (accessToken && refreshToken) {
+            const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionErr) {
+              set({ error: sessionErr.message, isLoading: false });
+              return { success: false, error: sessionErr.message };
+            }
+            if (sessionData.user) {
+              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+              set({
+                user: sessionData.user,
+                session: sessionData.session,
+                isGuest: false,
+                isLoading: false,
+              });
+              return { success: true };
+            }
+          } else if (code) {
+            const { data: exchangeData, error: exchangeErr } =
+              await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeErr) {
+              set({ error: exchangeErr.message, isLoading: false });
+              return { success: false, error: exchangeErr.message };
+            }
+            if (exchangeData.user) {
+              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+              set({
+                user: exchangeData.user,
+                session: exchangeData.session,
+                isGuest: false,
+                isLoading: false,
+              });
+              return { success: true };
+            }
+          }
+          set({ isLoading: false });
+          return { success: false, error: 'No authorization tokens found in redirect' };
+        } else if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
+          set({ isLoading: false });
+          return { success: false, error: 'Authentication was cancelled' };
+        } else {
+          set({ isLoading: false });
+          return { success: false, error: 'Authentication session ended without completing' };
+        }
+      } else if (Platform.OS === 'web') {
+        set({ isLoading: false });
+        return { success: true };
+      }
+
+      set({ isLoading: false });
+      return { success: false, error: 'No authorization URL returned' };
+    } catch (err: any) {
+      const message = err?.message || 'Google sign in failed';
+      console.warn('[AuthStore] Supabase Google OAuth error:', err);
+      set({ error: message, isLoading: false });
+      return { success: false, error: message };
+    }
   },
 
   signInWithYouTube: async (customEmail?: string) => {
     set({ isLoading: true, error: null });
     const targetEmail = customEmail?.trim() || 'youtube.curator@gmail.com';
 
-    if (isSupabaseConfigured) {
-      try {
-        const redirectUrl =
-          Platform.OS === 'web'
-            ? typeof window !== 'undefined'
-              ? `${window.location.origin}/auth-callback`
-              : 'austinmoviebox://auth-callback'
-            : Linking.createURL('auth-callback');
+    if (!isSupabaseConfigured) {
+      // Offline / Local mock sign in for testing
+      const youtubeUser = {
+        id: 'youtube_usr_' + Date.now(),
+        email: targetEmail,
+        app_metadata: { provider: 'youtube' },
+        user_metadata: {
+          name: targetEmail.split('@')[0],
+          full_name: 'YouTube Cinema Member',
+          provider: 'youtube',
+          youtube_connected: true,
+          avatar_url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=160',
+        },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+      } as unknown as User;
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            scopes: 'email profile',
-            redirectTo: redirectUrl,
-            skipBrowserRedirect: Platform.OS !== 'web',
-          },
-        });
+      const mockSession = {
+        access_token: 'youtube_oauth_token_' + Date.now(),
+        token_type: 'bearer',
+        expires_in: 86400,
+        refresh_token: 'youtube_refresh_token',
+        user: youtubeUser,
+      } as Session;
 
-        if (error) {
-          throw error;
-        }
-
-        if (Platform.OS !== 'web' && data?.url) {
-          const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          if (authResult.type === 'success' && authResult.url) {
-            const parsed = Linking.parse(authResult.url);
-            let accessToken = parsed.queryParams?.access_token as string | undefined;
-            let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
-            let code = parsed.queryParams?.code as string | undefined;
-
-            if (!accessToken && authResult.url.includes('#')) {
-              const fragment = authResult.url.split('#')[1] || '';
-              const params = new URLSearchParams(fragment);
-              accessToken = params.get('access_token') || undefined;
-              refreshToken = params.get('refresh_token') || undefined;
-              code = params.get('code') || undefined;
-            }
-
-            if (accessToken && refreshToken) {
-              const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              if (!sessionErr && sessionData.user) {
-                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-                set({
-                  user: sessionData.user,
-                  session: sessionData.session,
-                  isGuest: false,
-                  isLoading: false,
-                });
-                return { success: true };
-              }
-            } else if (code) {
-              const { data: exchangeData, error: exchangeErr } =
-                await supabase.auth.exchangeCodeForSession(code);
-              if (!exchangeErr && exchangeData.user) {
-                await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-                set({
-                  user: exchangeData.user,
-                  session: exchangeData.session,
-                  isGuest: false,
-                  isLoading: false,
-                });
-                return { success: true };
-              }
-            }
-          }
-        } else if (Platform.OS === 'web') {
-          set({ isLoading: false });
-          return { success: true };
-        }
-      } catch (err) {
-        console.warn('[AuthStore] Supabase YouTube OAuth fallback to verified local profile:', err);
-      }
+      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+      set({
+        user: youtubeUser,
+        session: mockSession,
+        isGuest: false,
+        isLoading: false,
+      });
+      return { success: true };
     }
 
-    // Provision verified YouTube account profile
-    const youtubeUser = {
-      id: 'youtube_usr_' + Date.now(),
-      email: targetEmail,
-      app_metadata: { provider: 'youtube' },
-      user_metadata: {
-        name: targetEmail.split('@')[0],
-        full_name: 'YouTube Cinema Member',
-        provider: 'youtube',
-        youtube_connected: true,
-        avatar_url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=160',
-      },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-    } as unknown as User;
+    try {
+      const redirectUrl =
+        Platform.OS === 'web'
+          ? typeof window !== 'undefined'
+            ? `${window.location.origin}/auth-callback`
+            : 'austinmoviebox://auth-callback'
+          : Linking.createURL('auth-callback');
 
-    const mockSession = {
-      access_token: 'youtube_oauth_token_' + Date.now(),
-      token_type: 'bearer',
-      expires_in: 86400,
-      refresh_token: 'youtube_refresh_token',
-      user: youtubeUser,
-    } as Session;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'email profile',
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
 
-    await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-    set({
-      user: youtubeUser,
-      session: mockSession,
-      isGuest: false,
-      isLoading: false,
-    });
-    return { success: true };
+      if (error) {
+        set({ error: error.message, isLoading: false });
+        return { success: false, error: error.message };
+      }
+
+      if (Platform.OS !== 'web' && data?.url) {
+        const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        if (authResult.type === 'success' && authResult.url) {
+          const parsed = Linking.parse(authResult.url);
+          const urlError = (parsed.queryParams?.error_description || parsed.queryParams?.error) as string | undefined;
+          if (urlError) {
+            set({ error: urlError, isLoading: false });
+            return { success: false, error: urlError };
+          }
+
+          let accessToken = parsed.queryParams?.access_token as string | undefined;
+          let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
+          let code = parsed.queryParams?.code as string | undefined;
+
+          if (!accessToken && authResult.url.includes('#')) {
+            const fragment = authResult.url.split('#')[1] || '';
+            const params = new URLSearchParams(fragment);
+            const hashError = params.get('error_description') || params.get('error');
+            if (hashError) {
+              set({ error: hashError, isLoading: false });
+              return { success: false, error: hashError };
+            }
+            accessToken = params.get('access_token') || undefined;
+            refreshToken = params.get('refresh_token') || undefined;
+            code = params.get('code') || undefined;
+          }
+
+          if (accessToken && refreshToken) {
+            const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionErr) {
+              set({ error: sessionErr.message, isLoading: false });
+              return { success: false, error: sessionErr.message };
+            }
+            if (sessionData.user) {
+              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+              set({
+                user: sessionData.user,
+                session: sessionData.session,
+                isGuest: false,
+                isLoading: false,
+              });
+              return { success: true };
+            }
+          } else if (code) {
+            const { data: exchangeData, error: exchangeErr } =
+              await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeErr) {
+              set({ error: exchangeErr.message, isLoading: false });
+              return { success: false, error: exchangeErr.message };
+            }
+            if (exchangeData.user) {
+              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
+              set({
+                user: exchangeData.user,
+                session: exchangeData.session,
+                isGuest: false,
+                isLoading: false,
+              });
+              return { success: true };
+            }
+          }
+          set({ isLoading: false });
+          return { success: false, error: 'No authorization tokens found in redirect' };
+        } else if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
+          set({ isLoading: false });
+          return { success: false, error: 'Authentication was cancelled' };
+        } else {
+          set({ isLoading: false });
+          return { success: false, error: 'Authentication session ended without completing' };
+        }
+      } else if (Platform.OS === 'web') {
+        set({ isLoading: false });
+        return { success: true };
+      }
+
+      set({ isLoading: false });
+      return { success: false, error: 'No authorization URL returned' };
+    } catch (err: any) {
+      const message = err?.message || 'YouTube sign in failed';
+      console.warn('[AuthStore] Supabase YouTube OAuth error:', err);
+      set({ error: message, isLoading: false });
+      return { success: false, error: message };
+    }
   },
 
   linkYouTube: async (customEmail?: string) => {

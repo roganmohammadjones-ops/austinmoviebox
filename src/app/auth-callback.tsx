@@ -21,14 +21,22 @@ export default function AuthCallbackScreen() {
         let accessToken = (params.access_token as string) || undefined;
         let refreshToken = (params.refresh_token as string) || undefined;
         let code = (params.code as string) || undefined;
+        let errorMsg = (params.error_description as string) || (params.error as string) || undefined;
 
         // If on web or tokens are in URL hash fragment
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash) {
           const fragment = window.location.hash.substring(1);
           const hashParams = new URLSearchParams(fragment);
+          errorMsg = hashParams.get('error_description') || hashParams.get('error') || errorMsg;
           accessToken = hashParams.get('access_token') || accessToken;
           refreshToken = hashParams.get('refresh_token') || refreshToken;
           code = hashParams.get('code') || code;
+        }
+
+        if (errorMsg && isMounted) {
+          useAuthStore.setState({ error: errorMsg, isLoading: false });
+          router.replace('/auth');
+          return;
         }
 
         if (accessToken && refreshToken) {

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["austinemoviebox", "austinmoviebox"],
+    "scheme": ["austinmoviebox", "austinemoviebox"],
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
@@ -41,8 +41,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},

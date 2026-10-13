@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
-import { Redirect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useOnboardingStore } from '../stores/onboarding-store';
 import { colors } from '../theme/tokens';
 
 export default function IndexScreen() {
+  const router = useRouter();
   const { hasCompletedOnboarding, isLoaded, loadOnboarding } = useOnboardingStore();
   const [mounted, setMounted] = useState(false);
 
@@ -13,27 +14,26 @@ export default function IndexScreen() {
     loadOnboarding().then(() => setMounted(true));
   }, [loadOnboarding]);
 
-  if (!isLoaded || !mounted) {
-    return (
-      <View style={styles.splashContainer}>
-        <Image
-          source={require('../../assets/images/logo-emblem.png')}
-          style={styles.logoImage}
-          contentFit="contain"
-          accessibilityLabel="AustinMovieBox Logo"
-        />
-        <Text style={styles.logoTitle}>AUSTIN MOVIEBOX</Text>
-        <Text style={styles.logoSubtitle}>CURATED THEATRICAL ARCHIVE</Text>
-        <ActivityIndicator color={colors.cinemaAmber} style={styles.spinner} />
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (isLoaded && mounted) {
+      const targetRoute = hasCompletedOnboarding ? '/(tabs)' : '/onboarding';
+      router.replace(targetRoute as any);
+    }
+  }, [isLoaded, mounted, hasCompletedOnboarding, router]);
 
-  if (!hasCompletedOnboarding) {
-    return <Redirect href={'/onboarding' as any} />;
-  }
-
-  return <Redirect href={'/(tabs)' as any} />;
+  return (
+    <View style={styles.splashContainer}>
+      <Image
+        source={require('../../assets/images/logo-emblem.png')}
+        style={styles.logoImage}
+        contentFit="contain"
+        accessibilityLabel="AustinMovieBox Logo"
+      />
+      <Text style={styles.logoTitle}>AUSTIN MOVIEBOX</Text>
+      <Text style={styles.logoSubtitle}>CURATED THEATRICAL ARCHIVE</Text>
+      <ActivityIndicator color={colors.cinemaAmber} style={styles.spinner} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

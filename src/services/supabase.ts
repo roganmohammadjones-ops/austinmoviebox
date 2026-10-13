@@ -53,7 +53,7 @@ export const supabase = createClient<Database>(clientUrl, clientAnonKey, {
     storage: customStorage,
     autoRefreshToken: !isServer,
     persistSession: !isServer,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web' && !isServer,
   },
 });
 
