@@ -12,6 +12,15 @@ import { usePreferencesStore } from '../stores/preferences-store';
 import { colors } from '../theme/tokens';
 
 export default function RootLayout() {
+  const userId = useAuthStore((state) => state.session?.user.id);
+  const favoritesHydrated = useFavoritesStore((state) => state.isHydrated);
+
+  useEffect(() => {
+    if (userId && favoritesHydrated) {
+      void useFavoritesStore.getState().syncWithCloud(userId);
+    }
+  }, [userId, favoritesHydrated]);
+
   useEffect(() => {
     async function bootstrap() {
       try {

@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../stores/auth-store';
-import { useFavoritesStore } from '../stores/favorites-store';
 import { colors } from '../theme/tokens';
 
 export default function AuthModalScreen() {
@@ -36,7 +35,6 @@ export default function AuthModalScreen() {
     error: storeError,
     clearError,
   } = useAuthStore();
-  const syncWithCloud = useFavoritesStore((state) => state.syncWithCloud);
 
   const displayError = localError || storeError;
 
@@ -70,20 +68,16 @@ export default function AuthModalScreen() {
 
       const res = await signUp(email.trim(), password);
       if (res.success) {
-        const user = useAuthStore.getState().user;
-        if (user) {
-          await syncWithCloud(user.id);
+        if (res.needsEmailConfirmation) {
+          setLocalError('Check your email to confirm your account, then sign in.');
+          return;
         }
-        router.back();
+        router.replace('/(tabs)');
       }
     } else {
       const res = await signIn(email.trim(), password);
       if (res.success) {
-        const user = useAuthStore.getState().user;
-        if (user) {
-          await syncWithCloud(user.id);
-        }
-        router.back();
+        router.replace('/(tabs)');
       }
     }
   };
@@ -94,18 +88,14 @@ export default function AuthModalScreen() {
     const res = await signInWithGoogle(email ? email.trim() : undefined);
     if (res.success) {
       if (Platform.OS !== 'web') {
-        const user = useAuthStore.getState().user;
-        if (user) {
-          await syncWithCloud(user.id);
-        }
-        router.back();
+        router.replace('/(tabs)');
       }
     }
   };
 
   const handleGuestContinue = async () => {
     await continueAsGuest();
-    router.back();
+    router.replace('/(tabs)');
   };
 
   return (

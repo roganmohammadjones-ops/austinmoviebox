@@ -1902,3 +1902,12 @@ It should have:
 - Production-oriented component structure
 
 The primary success criterion is that a person can install the application, skip account creation, immediately discover movies and save favorites, and later create an account without losing anything they already saved.
+
+
+## Web/mobile Google sign-in and in-app playback update (2026-10-12)
+
+- Google sign-in uses Supabase PKCE with one callback exchange shared by the browser result and Expo Router callback route. Web redirects preserve the configured deployment base path; installed mobile apps use `austinmoviebox://auth-callback`.
+- Session restoration starts automatically. Favorites sync runs in the background after local hydration and does not hold the user on the sign-in screen.
+- Official trailers play inside the app using the YouTube IFrame API. The native WebView identifies the app through its base URL, while the website uses its real origin. Missing, restricted, or failed trailers have explicit states and retry controls. Playback does not require Google sign-in.
+- Full-length movie streams are not supplied by the current TMDB catalog. A separate video source must be specified before adding full-movie playback.
+- See `docs/auth-and-playback.md` for exact callback URLs, verification, and outstanding release steps. Earlier blanket QA PASS claims do not establish that these new changes have been tested on physical devices.

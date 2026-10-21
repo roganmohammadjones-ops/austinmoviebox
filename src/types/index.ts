@@ -25,6 +25,7 @@ export interface Movie {
   studio?: string;
   trailerUrl?: string;
   youtubeKey?: string;
+  youtubeKeys?: string[];
 }
 
 export type MovieCategory = 'trending' | 'popular' | 'top_rated' | 'new_releases';

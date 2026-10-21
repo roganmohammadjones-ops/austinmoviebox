@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -77,9 +78,13 @@ export default function ProfileScreen() {
   };
 
   const handleConfirmSignOut = async () => {
-    await signOut();
-    setSignOutModalVisible(false);
-    showToast('Signed out from cloud vault');
+    try {
+      await signOut();
+      setSignOutModalVisible(false);
+      showToast('Signed out from cloud vault');
+    } catch {
+      showToast('Could not sign out. Check your connection and try again.');
+    }
   };
 
   const handleClearFavorites = async () => {
@@ -1086,6 +1091,18 @@ export default function ProfileScreen() {
                   not endorsed or certified by TMDB.
                 </Text>
               </View>
+
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Visit official website"
+                onPress={() => Linking.openURL('https://roganmohammadjones-ops.github.io/austinmoviebox')}
+                style={styles.aboutDetailItem}
+              >
+                <Ionicons name="globe-outline" size={16} color={colors.cinemaAmber} />
+                <Text style={[styles.aboutDetailText, { color: colors.cinemaAmber }]}>
+                  Official Web App: roganmohammadjones-ops.github.io/austinmoviebox
+                </Text>
+              </Pressable>
             </View>
 
             <Pressable

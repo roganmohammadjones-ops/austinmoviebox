@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import Constants from 'expo-constants';
 import {
   ActivityIndicator,
   Modal,
@@ -14,7 +15,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { fetchMovieTrailerKey } from '../services/movie-api';
+import { fetchMovieTrailerKeys } from '../services/movie-api';
+import { createTrailerDocument, isYouTubeVideoId, trailerPlaybackError } from '../services/trailer-player';
+import { usePreferencesStore } from '../stores/preferences-store';
 import { colors } from '../theme/tokens';
 import { Movie } from '../types';
 import { FavoriteButton } from './favorite-button';
@@ -25,66 +28,94 @@ interface TheatricalVideoPlayerProps {
   onClose: () => void;
 }
 
-export function TheatricalVideoPlayer({
-  movie,
-  visible,
-  onClose,
-}: TheatricalVideoPlayerProps) {
+export function TheatricalVideoPlayer({ movie, visible, onClose }: TheatricalVideoPlayerProps) {
+  const [attempt, setAttempt] = useState(0);
+  if (!visible || !movie) return null;
+  return <TrailerPlayer key={`${movie.id}-${movie.youtubeKey ?? ''}-${attempt}`} movie={movie} onClose={onClose} onRetry={() => setAttempt((value) => value + 1)} />;
+}
+
+function TrailerPlayer({ movie, onClose, onRetry }: { movie: Movie; onClose: () => void; onRetry: () => void }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const [trailerKey, setTrailerKey] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [trailerKeys, setTrailerKeys] = useState<string[]>([]);
+  const [trailerIndex, setTrailerIndex] = useState(0);
+  const trailerKey = trailerKeys[trailerIndex];
+  const [isLoading, setIsLoading] = useState(true);
+  const [playback, setPlayback] = useState('Loading trailer…');
+  const [error, setError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const autoplay = usePreferencesStore((state) => state.autoplayTrailers);
+  const instanceId = useId();
+  const movieId = movie?.id;
+  const cachedKey = movie?.youtubeKey;
+  const cachedKeys = movie.youtubeKeys;
+  const messageId = `${instanceId}-${movieId}-${trailerIndex}`;
+  const appId = Platform.OS === 'ios'
+    ? Constants.expoConfig?.ios?.bundleIdentifier
+    : Constants.expoConfig?.android?.package;
+  const playerOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.location.origin
+    : `https://${appId || 'com.austinmoviebox.austinemoviebox'}`;
 
   const isSmallDevice = windowWidth <= 360;
   const isDesktop = windowWidth >= 1024;
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function resolveTrailer() {
-      if (!visible || !movie) {
-        setTrailerKey(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if trailerKey is already cached on the movie
-      if (movie.youtubeKey) {
-        setTrailerKey(movie.youtubeKey);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
+    let active = true;
+    void (async () => {
       try {
-        const key = await fetchMovieTrailerKey(movie.id);
-        if (!isCancelled) {
-          setTrailerKey(key);
+        let keys: string[];
+        try {
+          keys = await (cachedKeys?.length ? Promise.resolve(cachedKeys) : fetchMovieTrailerKeys(movieId));
+        } catch (error) {
+          if (!isYouTubeVideoId(cachedKey)) throw error;
+          keys = [cachedKey];
         }
-      } catch (err) {
-        console.error('[TheatricalVideoPlayer] Error fetching trailer key:', err);
+        if (!active) return;
+        const validKeys = [...new Set(keys.filter(isYouTubeVideoId))].slice(0, 3);
+        if (!validKeys.length) {
+          setError('No official trailer is available for this movie yet.');
+          return;
+        }
+        setTrailerKeys(validKeys);
+      } catch {
+        if (active) setError('Could not load this trailer. Check your connection and try again.');
       } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+        if (active) setIsLoading(false);
       }
+    })();
+    return () => { active = false; };
+  }, [movieId, cachedKey, cachedKeys]);
+
+  const html = useMemo(() => trailerKey
+    ? createTrailerDocument(trailerKey, playerOrigin, autoplay, messageId)
+    : '', [trailerKey, playerOrigin, autoplay, messageId]);
+
+  const handlePlayerMessage = useCallback((message: unknown) => {
+    if (!message || typeof message !== 'object') return;
+    const event = message as { source?: string; id?: string; type?: string; value?: number };
+    if (event.source !== 'austinmoviebox-player' || event.id !== messageId) return;
+    if (event.type === 'error') {
+      if ([100, 101, 150].includes(event.value ?? 0) && trailerIndex + 1 < trailerKeys.length) {
+        setPlayback('Trying another trailer…');
+        setTrailerIndex(trailerIndex + 1);
+      } else setError(trailerPlaybackError(event.value ?? 0));
     }
+    if (event.type === 'ready') setPlayback('Ready — tap play if needed');
+    if (event.type === 'state') {
+      setPlayback(event.value === 1 ? 'Playing trailer' : event.value === 2 ? 'Paused' : event.value === 0 ? 'Trailer ended' : 'Loading trailer…');
+    }
+  }, [messageId, trailerIndex, trailerKeys.length]);
 
-    resolveTrailer();
-
-    return () => {
-      isCancelled = true;
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const listener = (event: MessageEvent) => {
+      if (event.source === iframeRef.current?.contentWindow && event.origin === playerOrigin) {
+        handlePlayerMessage(event.data);
+      }
     };
-  }, [visible, movie]);
-
-  if (!visible || !movie) {
-    return null;
-  }
-
-  const embedUrl = trailerKey
-    ? `https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&playsinline=1&modestbranding=1&rel=0&iv_load_policy=3&controls=1&showinfo=0&origin=https://austinmoviebox.app`
-    : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(
-        `${movie.title} ${movie.releaseYear || ''} official trailer`
-      )}&autoplay=1&playsinline=1&controls=1`;
+    window.addEventListener('message', listener);
+    return () => window.removeEventListener('message', listener);
+  }, [playerOrigin, handlePlayerMessage]);
 
   const handleShare = async () => {
     try {
@@ -104,11 +135,11 @@ export function TheatricalVideoPlayer({
 
   // Maximize player container on mobile while keeping 16:9 ratio
   const maxPlayerWidth = Math.min(windowWidth, 900);
-  const playerHeight = Math.min(Math.round(maxPlayerWidth * (9 / 16)), windowHeight * 0.55);
+  const playerHeight = Math.max(200, Math.min(Math.round(maxPlayerWidth * (9 / 16)), windowHeight * 0.55));
 
   return (
     <Modal
-      visible={visible}
+      visible
       animationType="slide"
       transparent={false}
       onRequestClose={onClose}
@@ -120,7 +151,7 @@ export function TheatricalVideoPlayer({
           <View style={styles.headerLeft}>
             <View style={styles.liveBadge}>
               <View style={styles.pulseDot} />
-              <Text style={styles.liveBadgeText}>IN-APP STREAM</Text>
+              <Text style={styles.liveBadgeText}>OFFICIAL TRAILER</Text>
             </View>
             <Text numberOfLines={1} style={styles.movieHeaderTitle}>
               {movie.title}
@@ -140,33 +171,46 @@ export function TheatricalVideoPlayer({
 
         {/* Video Player Stage */}
         <View style={[styles.playerContainer, { height: playerHeight, width: maxPlayerWidth }]}>
-          {isLoading ? (
+          {error ? (
+            <View style={styles.loadingContainer}>
+              <Ionicons name="videocam-off-outline" size={30} color={colors.cinemaAmber} />
+              <Text accessibilityRole="alert" style={[styles.loadingText, { textAlign: 'center', paddingHorizontal: 20 }]}>{error}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Retry trailer" onPress={onRetry} style={styles.dismissBtn}>
+                <Text style={styles.dismissBtnText}>Try Again</Text>
+              </Pressable>
+            </View>
+          ) : isLoading || !trailerKey ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.cinemaAmber} />
-              <Text style={styles.loadingText}>Accessing Theatrical Stream...</Text>
+              <Text style={styles.loadingText}>Loading official trailer…</Text>
             </View>
           ) : Platform.OS === 'web' ? (
             <iframe
-              src={embedUrl}
+              key={messageId}
+              ref={iframeRef}
+              srcDoc={html}
               title={`${movie.title} Trailer`}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                backgroundColor: colors.cinemaCanvas,
-              }}
+              style={{ width: '100%', height: '100%', border: 'none', backgroundColor: colors.cinemaCanvas }}
+              referrerPolicy="strict-origin-when-cross-origin"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
           ) : (
             <WebView
-              source={{ uri: embedUrl }}
+              key={messageId}
+              source={{ html, baseUrl: playerOrigin }}
+              originWhitelist={['https://*']}
               style={styles.webView}
               allowsFullscreenVideo
               allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
+              mediaPlaybackRequiresUserAction={!autoplay}
               javaScriptEnabled
               domStorageEnabled
+              onMessage={(event) => {
+                try { handlePlayerMessage(JSON.parse(event.nativeEvent.data)); } catch { /* Ignore unrelated messages. */ }
+              }}
+              onError={() => setError(trailerPlaybackError(0))}
+              onHttpError={() => setError(trailerPlaybackError(0))}
             />
           )}
         </View>
@@ -226,11 +270,11 @@ export function TheatricalVideoPlayer({
             <View style={styles.theatricalStreamLeft}>
               <View style={styles.liveStreamDot} />
               <Text style={styles.theatricalStreamText}>
-                IN-APP THEATRICAL PLAYBACK ACTIVE
+                {error ? 'Trailer unavailable' : playback}
               </Text>
             </View>
             <View style={styles.theatricalStreamBadge}>
-              <Text style={styles.theatricalStreamBadgeText}>1080P HD · DOLBY AUDIO</Text>
+              <Text style={styles.theatricalStreamBadgeText}>YOUTUBE</Text>
             </View>
           </View>
 

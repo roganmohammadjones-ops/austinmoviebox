@@ -5,9 +5,8 @@
  * Pure TMDB API data with zero dummy or hardcoded mock fallbacks.
  */
 
-import * as WebBrowser from 'expo-web-browser';
-import { Linking, Platform } from 'react-native';
 import { Movie } from '../types';
+import { selectTrailerKeys } from './trailer-player';
 
 // TMDB Configuration from environment variables
 const defaultTmdbApiKey = 'd713b8b71e557bd1d18b9b230d0c4a7a';
@@ -206,24 +205,11 @@ export function mapTmdbMovie(tmdbMovie: any): Movie {
   const durationMinutes =
     typeof tmdbMovie.runtime === 'number' ? tmdbMovie.runtime : 0;
 
-  let youtubeKey: string | undefined;
+  const youtubeKeys = selectTrailerKeys(tmdbMovie.videos?.results);
+  const youtubeKey = youtubeKeys[0];
   let trailerUrl: string | undefined;
 
-  if (tmdbMovie.videos?.results && Array.isArray(tmdbMovie.videos.results)) {
-    const youtubeVideos = tmdbMovie.videos.results.filter(
-      (v: any) => v.site === 'YouTube' && v.key
-    );
-    const officialTrailer =
-      youtubeVideos.find((v: any) => v.type === 'Trailer' && v.official) ||
-      youtubeVideos.find((v: any) => v.type === 'Trailer') ||
-      youtubeVideos.find((v: any) => v.type === 'Teaser') ||
-      youtubeVideos[0];
-
-    if (officialTrailer?.key) {
-      youtubeKey = officialTrailer.key;
-      trailerUrl = `https://www.youtube.com/watch?v=${officialTrailer.key}`;
-    }
-  }
+  if (youtubeKey) trailerUrl = `https://www.youtube.com/watch?v=${youtubeKey}`;
 
   // Fallback trailer search URL if direct YouTube video key is not attached
   if (!trailerUrl) {
@@ -255,6 +241,7 @@ export function mapTmdbMovie(tmdbMovie: any): Movie {
     studio,
     trailerUrl,
     youtubeKey,
+    youtubeKeys,
   };
 }
 
@@ -440,101 +427,26 @@ export async function fetchMovieDetails(id: string): Promise<Movie | null> {
 }
 
 /**
- * Theatrical Video Player Helper: Opens official movie trailer in full-screen in-app viewer.
- * Supports direct YouTube trailer key with fallback to official trailer search.
- */
-export async function openMovieTrailer(movie: Movie): Promise<void> {
-  if (!movie) return;
-
-  let key = movie.youtubeKey;
-  if (!key && movie.id) {
-    key = (await fetchMovieTrailerKey(movie.id)) || undefined;
-  }
-
-  const directVideoUrl = key ? `https://www.youtube.com/watch?v=${key}` : null;
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-    `${movie.title} ${movie.releaseYear || ''} official trailer`
-  )}`;
-  const targetUrl = directVideoUrl || movie.trailerUrl || searchUrl;
-
-  // On Web, use window.open or Linking to avoid popup blocker issues
-  if (Platform.OS === 'web') {
-    try {
-      if (typeof window !== 'undefined') {
-        const win = window.open(targetUrl, '_blank', 'noopener,noreferrer');
-        if (win) return;
-      }
-    } catch (e) {
-      console.warn('[Trailer] Web window.open failed:', e);
-    }
-    try {
-      await Linking.openURL(targetUrl);
-      return;
-    } catch (linkErr) {
-      console.warn('[Trailer] Web Linking.openURL failed:', linkErr);
-    }
-  }
-
-  // On native platforms, prefer opening the YouTube app if key is present
-  if (key && (Platform.OS === 'ios' || Platform.OS === 'android')) {
-    const youtubeAppUrl = `vnd.youtube:${key}`;
-    try {
-      const canOpen = await Linking.canOpenURL(youtubeAppUrl);
-      if (canOpen) {
-        await Linking.openURL(youtubeAppUrl);
-        return;
-      }
-    } catch {
-      // YouTube app not installed or schema not permitted, fall through
-    }
-  }
-
-  // Fallback to in-app browser or standard linking
-  try {
-    await WebBrowser.openBrowserAsync(targetUrl, {
-      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-      toolbarColor: '#111214',
-      controlsColor: '#D7A35B',
-    });
-  } catch (err) {
-    console.warn('[Trailer] Failed to open in WebBrowser, trying Linking:', err);
-    try {
-      await Linking.openURL(targetUrl);
-    } catch (linkErr) {
-      console.error('[Trailer] Could not open URL via Linking:', linkErr);
-    }
-  }
-}
-
-/**
  * Fetches the official YouTube trailer video key for a given movie directly from TMDB
  */
 export async function fetchMovieTrailerKey(movieId: string): Promise<string | null> {
-  if (!movieId || !isTmdbConfigured) return null;
+  return (await fetchMovieTrailerKeys(movieId))[0] ?? null;
+}
 
+export async function fetchMovieTrailerKeys(movieId: string): Promise<string[]> {
+  if (!movieId || !isTmdbConfigured) return [];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(buildUrl(`/movie/${movieId}/videos`), {
       headers: getHeaders(),
+      signal: controller.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`TMDB trailer request failed (${res.status})`);
     const data = await res.json();
-    if (!data.results || !Array.isArray(data.results)) return null;
-
-    const youtubeVideos = data.results.filter(
-      (v: any) => v.site === 'YouTube' && v.key
-    );
-
-    const officialTrailer =
-      youtubeVideos.find((v: any) => v.type === 'Trailer' && v.official) ||
-      youtubeVideos.find((v: any) => v.type === 'Trailer') ||
-      youtubeVideos.find((v: any) => v.type === 'Teaser') ||
-      youtubeVideos[0];
-
-    return officialTrailer?.key || null;
-  } catch (err) {
-    console.error('[TMDB] Error fetching trailer key:', err);
-    return null;
+    return selectTrailerKeys(data.results);
+  } finally {
+    clearTimeout(timeout);
   }
 }
-
-

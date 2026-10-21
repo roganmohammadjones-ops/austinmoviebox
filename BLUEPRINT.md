@@ -51,7 +51,7 @@ Movie lovers frequently encounter movie recommendations or browse titles on thei
 - Complex payment/subscription streaming provider deep-links.
 - User review comments and social community feeds.
 - Push notifications for new releases.
-- Video trailer playback via native media players.
+- Full-length movie streaming without a configured video source. Official embedded trailers are supported (see the update below).
 
 ---
 
@@ -236,3 +236,12 @@ src/
 - **Task 4: Movie Browsing & Search**: Discover screen with hero backdrop and categorized rows; Explore screen with live filtering.
 - **Task 5: Movie Detail & Favoriting**: Dynamic detail screen (`/movie/[id]`), interactive favorite toggle with optimistic updates.
 - **Task 6: Cloud Sync & Favorites Hub**: Favorites tab with guest-mode local indicators, Supabase Auth modal, and automated cloud sync merge.
+
+
+## Web/mobile Google sign-in and in-app playback update (2026-10-12)
+
+- Google sign-in uses Supabase PKCE with one callback exchange shared by the browser result and Expo Router callback route. Web redirects preserve the configured deployment base path; installed mobile apps use `austinmoviebox://auth-callback`.
+- Session restoration starts automatically. Favorites sync runs in the background after local hydration and does not hold the user on the sign-in screen.
+- Official trailers play inside the app using the YouTube IFrame API. The native WebView identifies the app through its base URL, while the website uses its real origin. Missing, restricted, or failed trailers have explicit states and retry controls. Playback does not require Google sign-in.
+- Full-length movie streams are not supplied by the current TMDB catalog. A separate video source must be specified before adding full-movie playback.
+- See `docs/auth-and-playback.md` for exact callback URLs, verification, and outstanding release steps. Earlier blanket QA PASS claims do not establish that these new changes have been tested on physical devices.

@@ -1,14 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Session } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import type { User, Session } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { AppState, Platform } from 'react-native';
 import { create } from 'zustand';
+import { createOAuthCallbackHandler, webAuthRedirectUrl } from '../services/oauth-flow';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GUEST_STORAGE_KEY = '@moviebox_is_guest';
+const oauthCallback = createOAuthCallbackHandler<Session>(supabase.auth);
+let initialization: Promise<void> | null = null;
+let listening = false;
+
+type AuthResult = { success: boolean; error?: string; needsEmailConfirmation?: boolean };
 
 interface AuthState {
   user: User | null;
@@ -17,548 +24,159 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   initializeAuth: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signInWithGoogle: (customEmail?: string) => Promise<{ success: boolean; error?: string }>;
-  signInWithYouTube: (customEmail?: string) => Promise<{ success: boolean; error?: string }>;
-  linkYouTube: (youtubeEmail?: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string) => Promise<AuthResult>;
+  signInWithGoogle: (email?: string) => Promise<AuthResult>;
+  completeOAuthSignIn: (url: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  session: null,
-  isGuest: true,
-  isLoading: true,
-  error: null,
+export const useAuthStore = create<AuthState>((set, get) => {
+  const acceptSession = (session: Session | null) => {
+    set({ session, user: session?.user ?? null, isGuest: !session, isLoading: false, error: null });
+    void AsyncStorage.setItem(GUEST_STORAGE_KEY, session ? 'false' : 'true').catch(() => {});
+  };
+  const fail = (error: unknown): AuthResult => {
+    const message = error instanceof Error ? error.message : 'Sign-in failed. Please try again.';
+    set({ error: message, isLoading: false });
+    return { success: false, error: message };
+  };
+  const requireConfigured = () => {
+    if (!isSupabaseConfigured) throw new Error('Sign-in is unavailable. You can continue browsing as a guest.');
+  };
 
-  clearError: () => set({ error: null }),
+  return {
+    user: null,
+    session: null,
+    isGuest: true,
+    isLoading: true,
+    error: null,
+    clearError: () => set({ error: null }),
 
-  initializeAuth: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      if (!isSupabaseConfigured) {
-        // Run fully in guest mode
-        const storedGuest = await AsyncStorage.getItem(GUEST_STORAGE_KEY);
-        set({
-          user: null,
-          session: null,
-          isGuest: storedGuest !== 'false',
-          isLoading: false,
-        });
-        return;
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        console.warn('Supabase getSession warning:', error.message);
-      }
-
-      if (data?.session) {
-        set({
-          session: data.session,
-          user: data.session.user,
-          isGuest: false,
-          isLoading: false,
-        });
-      } else {
-        set({
-          session: null,
-          user: null,
-          isGuest: true,
-          isLoading: false,
-        });
-      }
-
-      // Listen for auth state changes
-      supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) {
-          set({
-            session,
-            user: session.user,
-            isGuest: false,
-          });
-        } else {
-          set({
-            session: null,
-            user: null,
-            isGuest: true,
-          });
+    initializeAuth: () => {
+      if (initialization) return initialization;
+      initialization = (async () => {
+        if (!isSupabaseConfigured) {
+          acceptSession(null);
+          return;
         }
-      });
-    } catch (err) {
-      console.warn('Auth initialization error:', err);
-      set({ isLoading: false, isGuest: true });
-    }
-  },
-
-  signIn: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    if (!isSupabaseConfigured) {
-      // Offline / Local mock sign in for testing
-      const isGmail = email.toLowerCase().includes('@gmail.com') || email.toLowerCase().includes('@googlemail.com');
-      const mockUser = {
-        id: 'usr_' + Date.now(),
-        email,
-        app_metadata: isGmail ? { provider: 'google' } : {},
-        user_metadata: {
-          name: email.split('@')[0],
-          youtube_connected: isGmail,
-          provider: isGmail ? 'google' : 'email',
-        },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as unknown as User;
-
-      const mockSession = {
-        access_token: 'mock_token',
-        token_type: 'bearer',
-        expires_in: 3600,
-        refresh_token: 'mock_refresh',
-        user: mockUser,
-      } as Session;
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: mockUser,
-        session: mockSession,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        set({ error: error.message, isLoading: false });
-        return { success: false, error: error.message };
-      }
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: data.user,
-        session: data.session,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    } catch (err: any) {
-      const message = err?.message || 'Failed to sign in';
-      set({ error: message, isLoading: false });
-      return { success: false, error: message };
-    }
-  },
-
-  signUp: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    if (!isSupabaseConfigured) {
-      // Offline / Local mock sign up for testing
-      const isGmail = email.toLowerCase().includes('@gmail.com') || email.toLowerCase().includes('@googlemail.com');
-      const mockUser = {
-        id: 'usr_' + Date.now(),
-        email,
-        app_metadata: isGmail ? { provider: 'google' } : {},
-        user_metadata: {
-          name: email.split('@')[0],
-          youtube_connected: isGmail,
-          provider: isGmail ? 'google' : 'email',
-        },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as unknown as User;
-
-      const mockSession = {
-        access_token: 'mock_token',
-        token_type: 'bearer',
-        expires_in: 3600,
-        refresh_token: 'mock_refresh',
-        user: mockUser,
-      } as Session;
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: mockUser,
-        session: mockSession,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        set({ error: error.message, isLoading: false });
-        return { success: false, error: error.message };
-      }
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: data.user,
-        session: data.session,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    } catch (err: any) {
-      const message = err?.message || 'Failed to sign up';
-      set({ error: message, isLoading: false });
-      return { success: false, error: message };
-    }
-  },
-
-  signInWithGoogle: async (customEmail?: string) => {
-    set({ isLoading: true, error: null });
-    const targetEmail = customEmail?.trim() || 'curator@gmail.com';
-
-    if (!isSupabaseConfigured) {
-      // Offline / Local mock sign in for testing
-      const googleUser = {
-        id: 'google_usr_' + Date.now(),
-        email: targetEmail,
-        app_metadata: { provider: 'google' },
-        user_metadata: {
-          name: targetEmail.split('@')[0],
-          full_name: 'Verified Google Cinema Curator',
-          provider: 'google',
-          youtube_connected: true,
-          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160',
-        },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as unknown as User;
-
-      const mockSession = {
-        access_token: 'google_oauth_token_' + Date.now(),
-        token_type: 'bearer',
-        expires_in: 86400,
-        refresh_token: 'google_refresh_token',
-        user: googleUser,
-      } as Session;
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: googleUser,
-        session: mockSession,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-
-    try {
-      const redirectUrl =
-        Platform.OS === 'web'
-          ? typeof window !== 'undefined'
-            ? `${window.location.origin}/auth-callback`
-            : 'austinmoviebox://auth-callback'
-          : Linking.createURL('auth-callback');
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'email profile',
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
-        },
-      });
-
-      if (error) {
-        set({ error: error.message, isLoading: false });
-        return { success: false, error: error.message };
-      }
-
-      if (Platform.OS !== 'web' && data?.url) {
-        const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        if (authResult.type === 'success' && authResult.url) {
-          const parsed = Linking.parse(authResult.url);
-          const urlError = (parsed.queryParams?.error_description || parsed.queryParams?.error) as string | undefined;
-          if (urlError) {
-            set({ error: urlError, isLoading: false });
-            return { success: false, error: urlError };
+        // Install once; auth events must not await another Supabase operation.
+        if (!listening) {
+          listening = true;
+          supabase.auth.onAuthStateChange((_event, session) => acceptSession(session));
+          if (Platform.OS !== 'web') {
+            const updateRefresh = (state: string) => {
+              if (state === 'active') supabase.auth.startAutoRefresh();
+              else supabase.auth.stopAutoRefresh();
+            };
+            AppState.addEventListener('change', updateRefresh);
+            updateRefresh(AppState.currentState);
           }
-
-          let accessToken = parsed.queryParams?.access_token as string | undefined;
-          let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
-          let code = parsed.queryParams?.code as string | undefined;
-
-          if (!accessToken && authResult.url.includes('#')) {
-            const fragment = authResult.url.split('#')[1] || '';
-            const params = new URLSearchParams(fragment);
-            const hashError = params.get('error_description') || params.get('error');
-            if (hashError) {
-              set({ error: hashError, isLoading: false });
-              return { success: false, error: hashError };
-            }
-            accessToken = params.get('access_token') || undefined;
-            refreshToken = params.get('refresh_token') || undefined;
-            code = params.get('code') || undefined;
-          }
-
-          if (accessToken && refreshToken) {
-            const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (sessionErr) {
-              set({ error: sessionErr.message, isLoading: false });
-              return { success: false, error: sessionErr.message };
-            }
-            if (sessionData.user) {
-              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-              set({
-                user: sessionData.user,
-                session: sessionData.session,
-                isGuest: false,
-                isLoading: false,
-              });
-              return { success: true };
-            }
-          } else if (code) {
-            const { data: exchangeData, error: exchangeErr } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeErr) {
-              set({ error: exchangeErr.message, isLoading: false });
-              return { success: false, error: exchangeErr.message };
-            }
-            if (exchangeData.user) {
-              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-              set({
-                user: exchangeData.user,
-                session: exchangeData.session,
-                isGuest: false,
-                isLoading: false,
-              });
-              return { success: true };
-            }
-          }
-          set({ isLoading: false });
-          return { success: false, error: 'No authorization tokens found in redirect' };
-        } else if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
-          set({ isLoading: false });
-          return { success: false, error: 'Authentication was cancelled' };
-        } else {
-          set({ isLoading: false });
-          return { success: false, error: 'Authentication session ended without completing' };
         }
-      } else if (Platform.OS === 'web') {
-        set({ isLoading: false });
-        return { success: true };
-      }
-
-      set({ isLoading: false });
-      return { success: false, error: 'No authorization URL returned' };
-    } catch (err: any) {
-      const message = err?.message || 'Google sign in failed';
-      console.warn('[AuthStore] Supabase Google OAuth error:', err);
-      set({ error: message, isLoading: false });
-      return { success: false, error: message };
-    }
-  },
-
-  signInWithYouTube: async (customEmail?: string) => {
-    set({ isLoading: true, error: null });
-    const targetEmail = customEmail?.trim() || 'youtube.curator@gmail.com';
-
-    if (!isSupabaseConfigured) {
-      // Offline / Local mock sign in for testing
-      const youtubeUser = {
-        id: 'youtube_usr_' + Date.now(),
-        email: targetEmail,
-        app_metadata: { provider: 'youtube' },
-        user_metadata: {
-          name: targetEmail.split('@')[0],
-          full_name: 'YouTube Cinema Member',
-          provider: 'youtube',
-          youtube_connected: true,
-          avatar_url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=160',
-        },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as unknown as User;
-
-      const mockSession = {
-        access_token: 'youtube_oauth_token_' + Date.now(),
-        token_type: 'bearer',
-        expires_in: 86400,
-        refresh_token: 'youtube_refresh_token',
-        user: youtubeUser,
-      } as Session;
-
-      await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-      set({
-        user: youtubeUser,
-        session: mockSession,
-        isGuest: false,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-
-    try {
-      const redirectUrl =
-        Platform.OS === 'web'
-          ? typeof window !== 'undefined'
-            ? `${window.location.origin}/auth-callback`
-            : 'austinmoviebox://auth-callback'
-          : Linking.createURL('auth-callback');
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'email profile',
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
-        },
-      });
-
-      if (error) {
-        set({ error: error.message, isLoading: false });
-        return { success: false, error: error.message };
-      }
-
-      if (Platform.OS !== 'web' && data?.url) {
-        const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        if (authResult.type === 'success' && authResult.url) {
-          const parsed = Linking.parse(authResult.url);
-          const urlError = (parsed.queryParams?.error_description || parsed.queryParams?.error) as string | undefined;
-          if (urlError) {
-            set({ error: urlError, isLoading: false });
-            return { success: false, error: urlError };
-          }
-
-          let accessToken = parsed.queryParams?.access_token as string | undefined;
-          let refreshToken = parsed.queryParams?.refresh_token as string | undefined;
-          let code = parsed.queryParams?.code as string | undefined;
-
-          if (!accessToken && authResult.url.includes('#')) {
-            const fragment = authResult.url.split('#')[1] || '';
-            const params = new URLSearchParams(fragment);
-            const hashError = params.get('error_description') || params.get('error');
-            if (hashError) {
-              set({ error: hashError, isLoading: false });
-              return { success: false, error: hashError };
-            }
-            accessToken = params.get('access_token') || undefined;
-            refreshToken = params.get('refresh_token') || undefined;
-            code = params.get('code') || undefined;
-          }
-
-          if (accessToken && refreshToken) {
-            const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (sessionErr) {
-              set({ error: sessionErr.message, isLoading: false });
-              return { success: false, error: sessionErr.message };
-            }
-            if (sessionData.user) {
-              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-              set({
-                user: sessionData.user,
-                session: sessionData.session,
-                isGuest: false,
-                isLoading: false,
-              });
-              return { success: true };
-            }
-          } else if (code) {
-            const { data: exchangeData, error: exchangeErr } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeErr) {
-              set({ error: exchangeErr.message, isLoading: false });
-              return { success: false, error: exchangeErr.message };
-            }
-            if (exchangeData.user) {
-              await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'false');
-              set({
-                user: exchangeData.user,
-                session: exchangeData.session,
-                isGuest: false,
-                isLoading: false,
-              });
-              return { success: true };
-            }
-          }
-          set({ isLoading: false });
-          return { success: false, error: 'No authorization tokens found in redirect' };
-        } else if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
-          set({ isLoading: false });
-          return { success: false, error: 'Authentication was cancelled' };
-        } else {
-          set({ isLoading: false });
-          return { success: false, error: 'Authentication session ended without completing' };
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          if (error) throw error;
+          acceptSession(data.session);
+        } catch {
+          acceptSession(null);
         }
-      } else if (Platform.OS === 'web') {
-        set({ isLoading: false });
-        return { success: true };
-      }
+      })();
+      return initialization;
+    },
 
-      set({ isLoading: false });
-      return { success: false, error: 'No authorization URL returned' };
-    } catch (err: any) {
-      const message = err?.message || 'YouTube sign in failed';
-      console.warn('[AuthStore] Supabase YouTube OAuth error:', err);
-      set({ error: message, isLoading: false });
-      return { success: false, error: message };
-    }
-  },
-
-  linkYouTube: async (customEmail?: string) => {
-    const currentUser = get().user;
-    if (!currentUser) {
-      return get().signInWithYouTube(customEmail);
-    }
-    const targetEmail = customEmail?.trim() || currentUser.email || 'youtube.curator@gmail.com';
-    const updatedUser = {
-      ...currentUser,
-      user_metadata: {
-        ...currentUser.user_metadata,
-        youtube_connected: true,
-        youtube_email: targetEmail,
-      },
-    } as User;
-    set({ user: updatedUser });
-    return { success: true };
-  },
-
-  signOut: async () => {
-    set({ isLoading: true });
-    if (isSupabaseConfigured) {
+    signIn: async (email, password) => {
+      set({ isLoading: true, error: null });
       try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.warn('Sign out error:', err);
+        requireConfigured();
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        acceptSession(data.session);
+        return { success: true };
+      } catch (error) {
+        return fail(error);
       }
-    }
-    await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'true');
-    set({
-      user: null,
-      session: null,
-      isGuest: true,
-      isLoading: false,
-    });
-  },
+    },
 
-  continueAsGuest: async () => {
-    await AsyncStorage.setItem(GUEST_STORAGE_KEY, 'true');
-    set({
-      user: null,
-      session: null,
-      isGuest: true,
-      isLoading: false,
-    });
-  },
-}));
+    signUp: async (email, password) => {
+      set({ isLoading: true, error: null });
+      try {
+        requireConfigured();
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        acceptSession(data.session);
+        return { success: true, needsEmailConfirmation: !data.session };
+      } catch (error) {
+        return fail(error);
+      }
+    },
+
+    completeOAuthSignIn: async (url) => {
+      set({ isLoading: true, error: null });
+      try {
+        const session = await oauthCallback.complete(url);
+        acceptSession(session);
+        return { success: true };
+      } catch (error) {
+        return fail(error);
+      }
+    },
+
+    signInWithGoogle: async (email) => {
+      set({ isLoading: true, error: null });
+      oauthCallback.reset();
+      try {
+        requireConfigured();
+        const redirectTo = Platform.OS === 'web'
+          ? webAuthRedirectUrl(window.location.origin, Constants.expoConfig?.experiments?.baseUrl)
+          : Linking.createURL('auth-callback', { scheme: 'austinmoviebox' });
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            scopes: 'email profile',
+            redirectTo,
+            skipBrowserRedirect: true,
+            queryParams: { prompt: 'select_account', ...(email ? { login_hint: email } : {}) },
+          },
+        });
+        if (error) throw error;
+        if (!data.url) throw new Error('Google sign-in is unavailable. Please try again.');
+
+        if (Platform.OS === 'web') {
+          window.location.assign(data.url);
+          return { success: true };
+        }
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (result.type === 'success') return await get().completeOAuthSignIn(result.url);
+        // Android may route the callback before dismissing the browser window.
+        if (get().session) return { success: true };
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          set({ isLoading: false });
+          return { success: false };
+        }
+        throw new Error('Google sign-in did not finish. Please try again.');
+      } catch (error) {
+        return fail(error);
+      }
+    },
+
+    signOut: async () => {
+      set({ isLoading: true, error: null });
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          fail(error);
+          throw error;
+        }
+      }
+      oauthCallback.reset();
+      acceptSession(null);
+    },
+
+    continueAsGuest: async () => {
+      if (get().session) await get().signOut();
+      else acceptSession(null);
+    },
+  };
+});

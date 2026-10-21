@@ -2,7 +2,7 @@
   "expo": {
     "name": "AustinMovieBox",
     "slug": "austinemoviebox",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": ["austinmoviebox", "austinemoviebox"],
@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.austinmoviebox.austinemoviebox",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -22,7 +23,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.austinmoviebox.austinemoviebox"
+      "package": "com.austinmoviebox.austinemoviebox",
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",

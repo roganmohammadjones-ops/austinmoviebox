@@ -53,7 +53,9 @@ export const supabase = createClient<Database>(clientUrl, clientAnonKey, {
     storage: customStorage,
     autoRefreshToken: !isServer,
     persistSession: !isServer,
-    detectSessionInUrl: Platform.OS === 'web' && !isServer,
+    // One callback handler owns the exchange on both web and native.
+    flowType: 'pkce',
+    detectSessionInUrl: false,
   },
 });
 

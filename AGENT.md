@@ -16,7 +16,7 @@ All AI agents, coding assistants, and subagents operating in this repository **M
    [BLUEPRINT.md](file:///Users/apple/Downloads/AustinMovieBox/BLUEPRINT.md) and [DESIGN.md](file:///Users/apple/Downloads/AustinMovieBox/DESIGN.md) constitute the absolute product, architectural, and visual specification for MovieBox.  
    No code, schema, store, route, design token, or interaction may be implemented that contradicts or diverges from these documents.
 2. **Zero Hallucination / Scope Integrity**:  
-   Under no circumstances should features outside the MVP scope be introduced (e.g., video streaming players, payment rails, direct messaging, user reviews, social feeds, or TV casting). See [Section 2 of BLUEPRINT.md](file:///Users/apple/Downloads/AustinMovieBox/BLUEPRINT.md#L50-L56) and [Section 5 of DESIGN.md](file:///Users/apple/Downloads/AustinMovieBox/DESIGN.md#L126-L145).
+   Under no circumstances should features outside the MVP scope be introduced (e.g., full-length streaming without a configured source, payment rails, direct messaging, user reviews, social feeds, or TV casting). See [Section 2 of BLUEPRINT.md](file:///Users/apple/Downloads/AustinMovieBox/BLUEPRINT.md#L50-L56) and [Section 5 of DESIGN.md](file:///Users/apple/Downloads/AustinMovieBox/DESIGN.md#L126-L145).
 3. **Bounded-Task Iteration Protocol (DESIGN.md §64)**:  
    Agents must **never** attempt to implement the entire application in a single blind code generation pass. Development must strictly proceed through bounded, verifiable steps:
    $$\text{Understand} \to \text{Specify} \to \text{Design} \to \text{Plan Data/Architecture} \to \text{Implement Bounded Task} \to \text{Run App} \to \text{Test Acceptance Criteria} \to \text{Compare Design} \to \text{Correct Differences} \to \text{Update Documentation} \to \text{Commit Changes} \to \text{Next Bounded Task}$$
@@ -208,7 +208,7 @@ Construct modular, single-responsibility components in `src/components/`:
 - **Verify with Typecheck & Lint**: Run `npm run lint` and verify TypeScript compilation on all added code.
 
 ### MUST NOT DO
-- **Do NOT build out-of-scope features**: No video trailer players, payment gateways, reviews, or social features.
+- **Do NOT build out-of-scope features**: Official embedded trailers are supported; no full-length streaming without a configured source, payment gateways, reviews, or social features.
 - **Do NOT introduce inconsistent styling**: Never use light theme backgrounds, random Tailwind color utilities outside the palette, or unstyled raw buttons.
 - **Do NOT block boot sequence**: Never block the entire application on slow remote network calls during startup.
 - **Do NOT overwrite or delete documentation**: Keep [BLUEPRINT.md](file:///Users/apple/Downloads/AustinMovieBox/BLUEPRINT.md), [DESIGN.md](file:///Users/apple/Downloads/AustinMovieBox/DESIGN.md), and [AGENT.md](file:///Users/apple/Downloads/AustinMovieBox/AGENT.md) synchronized and accurate.
@@ -227,3 +227,12 @@ Before marking any milestone or task complete, ensure the following are verified
 - [x] **Supabase Auth**: Sign up, sign in, sign out with session persistence; validation and error messaging.
 - [x] **Cloud Sync & Migration**: Guest favorites merge into user's account upon sign-in/sign-up without duplicates or data loss.
 - [x] **Quality Bar**: All empty, loading, and error states present; no visual glitches or unhandled exceptions; responsive across mobile, tablet, and desktop viewports.
+
+
+## Web/mobile Google sign-in and in-app playback update (2026-10-12)
+
+- Google sign-in uses Supabase PKCE with one callback exchange shared by the browser result and Expo Router callback route. Web redirects preserve the configured deployment base path; installed mobile apps use `austinmoviebox://auth-callback`.
+- Session restoration starts automatically. Favorites sync runs in the background after local hydration and does not hold the user on the sign-in screen.
+- Official trailers play inside the app using the YouTube IFrame API. The native WebView identifies the app through its base URL, while the website uses its real origin. Missing, restricted, or failed trailers have explicit states and retry controls. Playback does not require Google sign-in.
+- Full-length movie streams are not supplied by the current TMDB catalog. A separate video source must be specified before adding full-movie playback.
+- See `docs/auth-and-playback.md` for exact callback URLs, verification, and outstanding release steps. Earlier blanket QA PASS claims do not establish that these new changes have been tested on physical devices.

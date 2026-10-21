@@ -57,7 +57,7 @@ test('TMDB Query Builder - URL & Parameter Construction', () => {
 });
 
 test('TMDB Video Trailer Resolver - Priority Selection', () => {
-  function selectTrailerKey(results: Array<{ site: string; key: string; type: string; official?: boolean }>): string | null {
+  function selectTrailerKey(results: { site: string; key: string; type: string; official?: boolean }[]): string | null {
     const youtubeVideos = results.filter((v) => v.site === 'YouTube' && v.key);
     const officialTrailer =
       youtubeVideos.find((v) => v.type === 'Trailer' && v.official) ||
